@@ -28,8 +28,8 @@ def _dublett_oversampling(x, sigma, fct_coster_kronig, max_oversampling):
     if narrowest_sigma <= 0:
         required = max_oversampling
     else:
-        # Aim for ten samples across the narrowest intrinsic width.
-        ratio = 10 * data_step / narrowest_sigma
+        # Aim for four samples across the narrowest intrinsic width.
+        ratio = 4 * data_step / narrowest_sigma
         required = max(1, int(np.ceil(ratio - 1e-12)))
     return required, min(required, max_oversampling)
 
