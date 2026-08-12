@@ -25,13 +25,26 @@ def test_shirley_same_output(shirley_func):
     assert np.array_equal(result1, result2)
 
 
-def test_shirley_subtracts_const_before_integration(shirley_func):
+def test_shirley_is_self_consistent(shirley_func):
+    y = np.array([10.0, 7.0, 4.0])
+    k = 0.5
+    const = 2.0
+
+    result = shirley_func(y, k=k, const=const)
+
+    assert result[-1] == const
+    assert np.allclose(result[:-1], result[1:] + k * (y[:-1] - result[:-1]))
+    assert np.allclose(result, [52 / 9, 11 / 3, 2])
+
+
+def test_shirley_const_changes_integral(shirley_func):
     y = np.array([10.0, 7.0, 4.0])
 
-    result = shirley_func(y, k=0.5, const=2.0)
+    low_const = shirley_func(y, k=0.5, const=2.0)
+    high_const = shirley_func(y, k=0.5, const=3.0)
 
-    # const + k * reverse_cumsum(y - const)
-    assert np.allclose(result, [9.5, 5.5, 3.0])
+    assert np.all(high_const > low_const)
+    assert not np.allclose(high_const - low_const, 1.0)
 
 
 def test_shirley_zero_k_is_constant_offset(shirley_func):
