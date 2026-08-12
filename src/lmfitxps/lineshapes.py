@@ -44,9 +44,9 @@ def dublett_components(
     if required > max_oversampling:
         warnings.warn(
             "The intrinsic dublett width requires a finer internal grid than "
-            f"max_oversampling={max_oversampling} permits (estimated requirement: "
-            f"{required}x). The convolved profile may depend on grid alignment; "
-            "increase max_oversampling deliberately if needed.",
+            "the configured max_oversampling permits. The convolved profile "
+            "may depend on grid alignment; increase max_oversampling "
+            "deliberately if needed.",
             RuntimeWarning,
             stacklevel=2,
         )
