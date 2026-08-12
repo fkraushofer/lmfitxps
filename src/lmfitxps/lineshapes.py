@@ -87,17 +87,17 @@ def dublett_components(
         kernel,
         is_binding_energy=is_binding_energy,
     )
-    scale = amplitude / np.max(primary + secondary)
-    primary *= scale
-    secondary *= scale
-
     if is_binding_energy:
         primary = np.interp(x[::-1], x_internal[::-1], primary[::-1])[::-1]
         secondary = np.interp(x[::-1], x_internal[::-1], secondary[::-1])[::-1]
     else:
         primary = np.interp(x, x_internal, primary)
         secondary = np.interp(x, x_internal, secondary)
-    return primary, secondary
+
+    # Retain the existing public meaning of amplitude as the maximum on the
+    # supplied x grid, while applying one common scale factor to both peaks.
+    scale = amplitude / np.max(primary + secondary)
+    return primary * scale, secondary * scale
 
 
 def dublett(
