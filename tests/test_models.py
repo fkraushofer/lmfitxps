@@ -59,7 +59,8 @@ def test_dublett_preserves_ratio_for_narrow_intrinsic_peaks(dublett_model):
         height_ratio=height_ratio,
         fct_coster_kronig=1.0,
     )
-    doublet = dublett_model.eval(params, x=x)
+    with pytest.warns(RuntimeWarning, match="max_oversampling"):
+        doublet = dublett_model.eval(params, x=x)
 
     primary_peak = np.max(doublet[np.abs(x - center) < 1.0])
     secondary_peak = np.max(doublet[np.abs(x - (center + soc)) < 1.0])
@@ -67,3 +68,53 @@ def test_dublett_preserves_ratio_for_narrow_intrinsic_peaks(dublett_model):
     assert secondary_peak / primary_peak == pytest.approx(
         height_ratio, rel=0.02
     )
+
+
+
+def test_dublett_reports_actual_ratios_and_oversampling(dublett_model):
+    """Diagnostics describe the profiles actually sampled on the fit grid."""
+    x = np.linspace(80.0, 68.0, 121)
+    params = dublett_model.make_params(
+        amplitude=1.0,
+        sigma=0.01,
+        gamma=0.0,
+        gaussian_sigma=0.67,
+        center=71.25,
+        soc=3.33,
+        height_ratio=0.75,
+        fct_coster_kronig=1.0,
+    )
+
+    with pytest.warns(RuntimeWarning, match="max_oversampling"):
+        diagnostics = dublett_model.ratio_diagnostics(params, x)
+
+    assert diagnostics["requested_area_ratio"] == 0.75
+    assert diagnostics["sampled_area_ratio"] == pytest.approx(0.75, rel=0.02)
+    assert diagnostics["sampled_height_ratio"] == pytest.approx(0.75, rel=0.02)
+    assert diagnostics["required_oversampling"] == 101
+    assert diagnostics["used_oversampling"] == 10
+    assert diagnostics["oversampling_limit_reached"]
+
+
+def test_dublett_accepts_user_defined_oversampling_limit():
+    """Users can consciously allow a finer internal grid."""
+    model = models.ConvGaussianDoniachDublett(
+        prefix="peak_", max_oversampling=25
+    )
+    x = np.linspace(80.0, 68.0, 121)
+    params = model.make_params(
+        amplitude=1.0,
+        sigma=0.01,
+        gamma=0.0,
+        gaussian_sigma=0.67,
+        center=71.25,
+        soc=3.33,
+        height_ratio=0.75,
+        fct_coster_kronig=1.0,
+    )
+
+    with pytest.warns(RuntimeWarning, match="max_oversampling"):
+        diagnostics = model.ratio_diagnostics(params, x)
+
+    assert diagnostics["used_oversampling"] == 25
+    assert diagnostics["required_oversampling"] == 101
