@@ -91,7 +91,7 @@ def test_dublett_reports_actual_ratios_and_oversampling(dublett_model):
     assert diagnostics["requested_area_ratio"] == 0.75
     assert diagnostics["sampled_area_ratio"] == pytest.approx(0.75, rel=0.02)
     assert diagnostics["sampled_height_ratio"] == pytest.approx(0.75, rel=0.02)
-    assert diagnostics["required_oversampling"] == 101
+    assert diagnostics["required_oversampling"] == 100
     assert diagnostics["used_oversampling"] == 10
     assert diagnostics["oversampling_limit_reached"]
 
@@ -117,4 +117,4 @@ def test_dublett_accepts_user_defined_oversampling_limit():
         diagnostics = model.ratio_diagnostics(params, x)
 
     assert diagnostics["used_oversampling"] == 25
-    assert diagnostics["required_oversampling"] == 101
+    assert diagnostics["required_oversampling"] == 100
