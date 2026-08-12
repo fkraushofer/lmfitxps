@@ -121,3 +121,42 @@ def test_dublett_accepts_user_defined_oversampling_limit():
 
     assert diagnostics["used_oversampling"] == 25
     assert diagnostics["required_oversampling"] == 40
+
+
+
+def test_dublett_accepts_rounded_uniform_grid(dublett_model):
+    """Typical decimal rounding in exported energy grids is acceptable."""
+    x = np.round(np.linspace(80.0, 68.0, 294), 4)
+    params = dublett_model.make_params(
+        amplitude=1.0,
+        sigma=0.2,
+        gamma=0.0,
+        gaussian_sigma=0.67,
+        center=71.25,
+        soc=3.33,
+        height_ratio=0.75,
+        fct_coster_kronig=1.0,
+    )
+
+    doublet = dublett_model.eval(params, x=x)
+
+    assert np.all(np.isfinite(doublet))
+
+
+def test_dublett_rejects_nonuniform_grid(dublett_model):
+    """Materially nonuniform grids remain invalid for FFT convolution."""
+    x = np.linspace(80.0, 68.0, 121)
+    x[60:] -= 0.02
+    params = dublett_model.make_params(
+        amplitude=1.0,
+        sigma=0.2,
+        gamma=0.0,
+        gaussian_sigma=0.67,
+        center=71.25,
+        soc=3.33,
+        height_ratio=0.75,
+        fct_coster_kronig=1.0,
+    )
+
+    with pytest.raises(ValueError, match="uniformly spaced"):
+        dublett_model.eval(params, x=x)
