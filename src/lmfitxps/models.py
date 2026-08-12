@@ -1,6 +1,6 @@
 import numpy as np
 from lmfit.lineshapes import doniach, gaussian, thermal_distribution
-from .lineshapes import singlett, dublett, fermi_edge, convolve, fft_convolve
+from .lineshapes import (singlett, dublett, dublett_components, fermi_edge,\n                         convolve, fft_convolve)
 from .backgrounds import tougaard, slope, shirley
 from lmfit import Model
 import lmfit
@@ -189,9 +189,59 @@ class ConvGaussianDoniachDublett(lmfit.model.Model):
 
     """ + lmfit.models.COMMON_INIT_DOC)
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(dublett, *args, **kwargs)
+    def __init__(self, *args, max_oversampling=10, **kwargs):
+        if not isinstance(max_oversampling, (int, np.integer)) or max_oversampling < 1:
+            raise ValueError("max_oversampling must be a positive integer")
+        self.max_oversampling = int(max_oversampling)
+
+        def oversampled_dublett(
+                x, amplitude, sigma, gamma, gaussian_sigma, center, soc,
+                height_ratio, fct_coster_kronig):
+            return dublett(
+                x, amplitude, sigma, gamma, gaussian_sigma, center, soc,
+                height_ratio, fct_coster_kronig,
+                max_oversampling=self.max_oversampling,
+            )
+
+        super().__init__(oversampled_dublett, *args, **kwargs)
         self._set_paramhints_prefix()
+
+    def eval_dublett_components(self, params, x):
+        """Evaluate the final sampled primary and secondary peak profiles."""
+        values = params.valuesdict()
+        names = (
+            'amplitude', 'sigma', 'gamma', 'gaussian_sigma', 'center',
+            'soc', 'height_ratio', 'fct_coster_kronig'
+        )
+        arguments = [values[self.prefix + name] for name in names]
+        return dublett_components(
+            x, *arguments, max_oversampling=self.max_oversampling
+        )
+
+    def ratio_diagnostics(self, params, x):
+        """Return requested and sampled ratios for the supplied fit range."""
+        primary, secondary = self.eval_dublett_components(params, x)
+        primary_area = abs(np.trapz(primary, x))
+        secondary_area = abs(np.trapz(secondary, x))
+        return {
+            'requested_area_ratio': params[
+                self.prefix + 'height_ratio'
+            ].value,
+            'sampled_area_ratio': secondary_area / primary_area,
+            'sampled_height_ratio': np.max(secondary) / np.max(primary),
+        }
+
+    def ratio_report(self, params, x):
+        """Format requested and actual doublet ratios for reporting."""
+        diagnostics = self.ratio_diagnostics(params, x)
+        return (
+            f"requested area ratio:      "
+            f"{diagnostics['requested_area_ratio']:.6f}\\n"
+            f"sampled area ratio:        "
+            f"{diagnostics['sampled_area_ratio']:.6f}\\n"
+            f"sampled peak-height ratio: "
+            f"{diagnostics['sampled_height_ratio']:.6f}"
+        )
 
     def _set_paramhints_prefix(self):
         self.set_param_hint('amplitude', value=100, min=0)
