@@ -9,6 +9,7 @@ from lmfit import Model
 import lmfit
 from lmfit.models import guess_from_peak
 from scipy.signal import convolve as sc_convolve
+from scipy.integrate import trapezoid
 import scipy.constants
 
 __author__ = "Julian Andreas Hochhaus"
@@ -224,8 +225,8 @@ class ConvGaussianDoniachDublett(lmfit.model.Model):
     def ratio_diagnostics(self, params, x):
         """Return requested and sampled ratios for the supplied fit range."""
         primary, secondary = self.eval_dublett_components(params, x)
-        primary_area = abs(np.trapz(primary, x))
-        secondary_area = abs(np.trapz(secondary, x))
+        primary_area = abs(trapezoid(primary, x))
+        secondary_area = abs(trapezoid(secondary, x))
         values = params.valuesdict()
         required, used = _dublett_oversampling(
             x,
@@ -376,7 +377,7 @@ class FermiEdgeModel(lmfit.model.Model):
             +----------------+---------------+----------------------------------------------------------------------------------------+
             | amplitude      | :obj:`float`  | step height :math:`A` of the fermi edge.                                               |
             +----------------+---------------+----------------------------------------------------------------------------------------+
-            | center         | :obj:`float`  | position :math:`\mu` of the edge (Fermi level)                                         |
+            | center         | :obj:`float`  | position :math:`\\mu` of the edge (Fermi level)                                         |
             +----------------+---------------+----------------------------------------------------------------------------------------+
             | kt             | :obj:`float`  | Boltzmann constant in eV/K multiplied by temperature T in Kelvin (:math:`k_B T`)       |
             +----------------+---------------+----------------------------------------------------------------------------------------+
