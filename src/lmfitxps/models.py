@@ -324,7 +324,8 @@ def dublett_ratio_diagnostics(result, x=None):
 def dublett_ratio_report(result, x=None):
     """Format actual sampled ratios for every dublett in a fit result."""
     reports = []
-    diagnostics = dublett_ratio_diagnostics(result, x=x)
+    report_x = result.userkws.get('x') if x is None else x
+    diagnostics = dublett_ratio_diagnostics(result, x=report_x)
     components = {
         (component.prefix.rstrip('_') or 'dublett'): component
         for component in result.model.components
