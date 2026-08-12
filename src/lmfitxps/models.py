@@ -1,6 +1,9 @@
 import numpy as np
 from lmfit.lineshapes import doniach, gaussian, thermal_distribution
-from .lineshapes import (singlett, dublett, dublett_components,\n                         _dublett_oversampling, fermi_edge, convolve,\n                         fft_convolve)
+from .lineshapes import (
+    singlett, dublett, dublett_components, _dublett_oversampling,
+    fermi_edge, convolve, fft_convolve
+)
 from .backgrounds import tougaard, slope, shirley
 from lmfit import Model
 import lmfit
