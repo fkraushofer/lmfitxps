@@ -450,24 +450,18 @@ class ShirleyBG(lmfit.model.Model):
     This implementation calculates the Shirley background by integrating the step characteristic of the spectrum.
     For further details, please refer to Shirley [6]_ or Jansson et al. [7]_.
     
-    The active Shirley background is calculated self-consistently from the
-    normalized cumulative integral of the intensity above the current
-    background:
+    The active Shirley background is calculated self-consistently from the normalized cumulative integral of the intensity above the current background:
 
     .. math::
         :label: shirley
 
-        B_{S,n}(E) = c + k
+        B_{S,n}(E) = c + k [I(E_{\\text{left}}) - c]
         \\frac{\\int_E^{E_{\\text{right}}}
         [I(E') - B_{S,n-1}(E')] \\, dE'}
         {\\int_{E_{\\text{left}}}^{E_{\\text{right}}}
         [I(E') - B_{S,n-1}(E')] \\, dE'}.
 
-    Here, :math:`c` is the right-hand background level and :math:`k` is
-    the total background step, so the endpoint values are :math:`c` and
-    :math:`c+k`. The normalization prevents the active background from
-    locally following peaks or noise.
-
+    Here, :math:`c` is the right-hand background level and :math:`k` is a dimensionless scaling factor. At :math:`k=0`, the background is constant at :math:`c`; at :math:`k=1`, its left-hand endpoint equals the leftmost data intensity. The normalization prevents the active background from locally following peaks or noise.
     .. table:: Model-specific available parameters
         :widths: auto
 
@@ -478,9 +472,9 @@ class ShirleyBG(lmfit.model.Model):
         +------------+---------------+----------------------------------------------------------------------------------------------------+
         | y          | :obj:`array`  | 1D-array containing the y-values (intensities) of the spectrum.                                    |
         +------------+---------------+----------------------------------------------------------------------------------------------------+
-        | k          | :obj:`float`  | Shirley parameter :math:`k`, determines step-height of the Shirley background.                     |
+        | k          | :obj:`float`  | Dimensionless Shirley factor; :math:`k=1` matches the left background endpoint to the data.        |
         +------------+---------------+----------------------------------------------------------------------------------------------------+
-        | const      | :obj:`float`  | Constant value added to the step-like Shirley background, often set to :math:`I_{\\text{right}}`.   |
+        | const      | :obj:`float`  | Constant right-hand background level, often set to :math:`I_{\\text{right}}`.                     |
         +------------+---------------+----------------------------------------------------------------------------------------------------+
 
         
@@ -533,8 +527,7 @@ class ShirleyBG(lmfit.model.Model):
         if x is None:
             return
         const = data[-1]
-        k = max(data[0] - const, 0)
-        params = self.make_params(k=k, const=const)
+        params = self.make_params(k=1, const=const)
         return lmfit.models.update_param_vals(params, self.prefix, **kwargs)
 
 
