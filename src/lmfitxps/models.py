@@ -246,11 +246,11 @@ class ConvGaussianDoniachDublett(lmfit.model.Model):
         diagnostics = self.ratio_diagnostics(params, x)
         return (
             f"requested area ratio:      "
-            f"{diagnostics['requested_area_ratio']:.6f}\\n"
+            f"{diagnostics['requested_area_ratio']:.6f}\n"
             f"sampled area ratio:        "
-            f"{diagnostics['sampled_area_ratio']:.6f}\\n"
+            f"{diagnostics['sampled_area_ratio']:.6f}\n"
             f"sampled peak-height ratio: "
-            f"{diagnostics['sampled_height_ratio']:.6f}\\n"
+            f"{diagnostics['sampled_height_ratio']:.6f}\n"
             f"oversampling used/required: "
             f"{diagnostics['used_oversampling']}x/"
             f"{diagnostics['required_oversampling']}x"
@@ -331,11 +331,12 @@ def dublett_ratio_report(result, x=None):
         for component in result.model.components
         if isinstance(component, ConvGaussianDoniachDublett)
     }
-    for label, values in diagnostics.items():
+    for label in diagnostics:
         component = components[label]
-        reports.append(f"{label}:\\n{component.ratio_report(result.params, x or result.userkws['x'])}")
-    return "\\n\\n".join(reports)
-
+        reports.append(
+            f"{label}:\n{component.ratio_report(result.params, report_x)}"
+        )
+    return "\n\n".join(reports)
 
 class FermiEdgeModel(lmfit.model.Model):
     __doc__ = ("""
