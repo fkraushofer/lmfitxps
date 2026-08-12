@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 from lmfit.lineshapes import doniach, gaussian, thermal_distribution
 from scipy.signal import convolve as sc_convolve
@@ -9,51 +11,135 @@ __version__ = "4.2.0"
 __maintainer__ = "Julian Andreas Hochhaus"
 __email__ = "julian.hochhaus@tu-dortmund.de"
 
-def dublett(x, amplitude, sigma, gamma, gaussian_sigma, center, soc, height_ratio, fct_coster_kronig):
+def _dublett_oversampling(x, sigma, fct_coster_kronig, max_oversampling):
+    """Return the required and capped internal-grid oversampling factors."""
+    x = np.asarray(x, dtype=float)
+    if x.ndim != 1 or x.size < 2:
+        raise ValueError("x must be a one-dimensional array with at least two points")
+    steps = np.diff(x)
+    if np.any(steps == 0) or not np.all(np.sign(steps) == np.sign(steps[0])):
+        raise ValueError("x must be strictly monotonic")
+
+    data_step = np.max(np.abs(steps))
+    narrowest_sigma = sigma * min(1.0, fct_coster_kronig)
+    if narrowest_sigma <= 0:
+        required = max_oversampling
+    else:
+        # Aim for ten samples across the narrowest intrinsic width.
+        required = max(1, int(np.ceil(10 * data_step / narrowest_sigma)))
+    return required, min(required, max_oversampling)
+
+
+def dublett_components(
+        x, amplitude, sigma, gamma, gaussian_sigma, center, soc,
+        height_ratio, fct_coster_kronig, max_oversampling=10):
+    """Evaluate the two convolved dublett components separately."""
+    x = np.asarray(x, dtype=float)
+    if not isinstance(max_oversampling, (int, np.integer)) or max_oversampling < 1:
+        raise ValueError("max_oversampling must be a positive integer")
+
+    required, oversampling = _dublett_oversampling(
+        x, sigma, fct_coster_kronig, max_oversampling
+    )
+    if required > max_oversampling:
+        warnings.warn(
+            "The intrinsic dublett width requires a finer internal grid than "
+            f"max_oversampling={max_oversampling} permits (estimated requirement: "
+            f"{required}x). The convolved profile may depend on grid alignment; "
+            "increase max_oversampling deliberately if needed.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
+    n_internal = (x.size - 1) * oversampling + 1
+    x_internal = np.linspace(x[0], x[-1], n_internal)
+    is_binding_energy = x_internal[-1] < x_internal[0]
+    second_center = center + soc if is_binding_energy else center - soc
+    kernel = (
+        1 / (np.sqrt(2 * np.pi) * gaussian_sigma)
+        * gaussian(
+            x_internal,
+            amplitude=1,
+            center=np.mean(x_internal),
+            sigma=gaussian_sigma,
+        )
+    )
+
+    primary = fft_convolve(
+        doniach(
+            x_internal, amplitude=1, center=center, sigma=sigma, gamma=gamma
+        ),
+        kernel,
+        is_binding_energy=is_binding_energy,
+    )
+    secondary = fft_convolve(
+        doniach(
+            x_internal,
+            amplitude=height_ratio,
+            center=second_center,
+            sigma=fct_coster_kronig * sigma,
+            gamma=gamma,
+        ),
+        kernel,
+        is_binding_energy=is_binding_energy,
+    )
+    scale = amplitude / np.max(primary + secondary)
+    primary *= scale
+    secondary *= scale
+
+    if is_binding_energy:
+        primary = np.interp(x[::-1], x_internal[::-1], primary[::-1])[::-1]
+        secondary = np.interp(x[::-1], x_internal[::-1], secondary[::-1])[::-1]
+    else:
+        primary = np.interp(x, x_internal, primary)
+        secondary = np.interp(x, x_internal, secondary)
+    return primary, secondary
+
+
+def dublett(
+        x, amplitude, sigma, gamma, gaussian_sigma, center, soc,
+        height_ratio, fct_coster_kronig, max_oversampling=10):
     """
-    Calculates the convolution of a Doniach-Sunjic Dublett with a Gaussian. Thereby, the Gaussian acts as the
-    convolution kernel.
+    Calculates the convolution of a Doniach-Sunjic Dublett with a Gaussian.
+
+    The intrinsic profiles and convolution are evaluated on an adaptively
+    oversampled grid before interpolation onto the input grid. The public
+    height_ratio name is retained for compatibility, but represents the
+    requested intrinsic amplitude/area ratio.
 
     Parameters
     ----------
     x: array-like
-        Array containing the energy of the spectrum to fit. Works for both, kinetic+binding energy scaled data.
+        Array containing the energy of the spectrum to fit.
     amplitude: float
-        factor used to scale the calculated convolution to the measured spectrum. This factor is used as the amplitude
-        of the Doniach profile.
+        Maximum amplitude of the combined convolved profile.
     sigma: float
-        Sigma of the Doniach profile
+        Sigma of the primary Doniach profile.
     gamma: float
-        asymmetry factor gamma of the Doniach profile
+        Asymmetry factor of both Doniach profiles.
     gaussian_sigma: float
-        sigma of the gaussian profile which is used as the convolution kernel
+        Sigma of the Gaussian convolution kernel.
     center: float
-        position of the maximum of the measured spectrum
+        Center of the primary peak.
     soc: float
-        distance of the second-highest peak (higher-bound-orbital) of the spectrum in relation to the maximum of the
-        spectrum (the lower-bound orbital). Given in absolute values, the model function automatically detects if
-        binding or kinetic energy scale is used.
+        Absolute spin-orbit separation.
     height_ratio: float
-        height ratio of the second-highest peak (higher-bound-orbital) of the spectrum in relation to the maximum of
-        the spectrum (the lower-bound orbital)
+        Requested intrinsic amplitude/area ratio of secondary to primary.
     fct_coster_kronig: float
-        ratio of the lorentzian-sigma of the second-highest peak (higher-bound-orbital) of the spectrum in relation to
-        the maximum of the spectrum (the lower-bound orbital)
-    Returns
-    ---------
-    array-type
-        convolution of a doniach dublett and a gaussian profile
-    """
-    is_binding_energy = x[-1] < x[0]
-    second_center = center + soc if is_binding_energy else center - soc
+        Ratio of secondary to primary Doniach sigma.
+    max_oversampling: int, optional
+        Maximum internal-grid oversampling factor. Defaults to 10.
 
-    conv_temp = fft_convolve(
-        doniach(x, amplitude=1, center=center, sigma=sigma, gamma=gamma) +
-        doniach(x, amplitude=height_ratio, center=second_center, sigma=fct_coster_kronig * sigma, gamma=gamma),
-        1 / (np.sqrt(2 * np.pi) * gaussian_sigma) * gaussian(x, amplitude=1, center=np.mean(x), sigma=gaussian_sigma),
-        is_binding_energy=is_binding_energy
+    Returns
+    -------
+    array-like
+        Convolution of the Doniach dublett and Gaussian profile.
+    """
+    primary, secondary = dublett_components(
+        x, amplitude, sigma, gamma, gaussian_sigma, center, soc,
+        height_ratio, fct_coster_kronig, max_oversampling=max_oversampling
     )
-    return amplitude * conv_temp / max(conv_temp)
+    return primary + secondary
 
 
 def singlett(x, amplitude, sigma, gamma, gaussian_sigma, center):
