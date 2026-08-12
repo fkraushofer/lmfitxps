@@ -40,6 +40,9 @@ def test_fit_tougaard_dublett(tougaard_model, dublett_model):
     result = fit_model.fit(y, params, y=y, x=x)
     assert result.success
     assert result.errorbars
+    ratio_report = models.dublett_ratio_report(result)
+    assert "requested area ratio" in ratio_report
+    assert "sampled area ratio" in ratio_report
 
 
 def test_dublett_preserves_ratio_for_narrow_intrinsic_peaks(dublett_model):
