@@ -1,11 +1,15 @@
 import numpy as np
 from lmfit.lineshapes import doniach, gaussian, thermal_distribution
-from .lineshapes import singlett, dublett, fermi_edge, convolve, fft_convolve
+from .lineshapes import (
+    singlett, dublett, dublett_components, _dublett_oversampling,
+    fermi_edge, convolve, fft_convolve
+)
 from .backgrounds import tougaard, slope, shirley
 from lmfit import Model
 import lmfit
 from lmfit.models import guess_from_peak
 from scipy.signal import convolve as sc_convolve
+from scipy.integrate import trapezoid
 import scipy.constants
 
 __author__ = "Julian Andreas Hochhaus"
@@ -189,9 +193,72 @@ class ConvGaussianDoniachDublett(lmfit.model.Model):
 
     """ + lmfit.models.COMMON_INIT_DOC)
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(dublett, *args, **kwargs)
+    def __init__(self, *args, max_oversampling=10, **kwargs):
+        if not isinstance(max_oversampling, (int, np.integer)) or max_oversampling < 1:
+            raise ValueError("max_oversampling must be a positive integer")
+        self.max_oversampling = int(max_oversampling)
+
+        def oversampled_dublett(
+                x, amplitude, sigma, gamma, gaussian_sigma, center, soc,
+                height_ratio, fct_coster_kronig):
+            return dublett(
+                x, amplitude, sigma, gamma, gaussian_sigma, center, soc,
+                height_ratio, fct_coster_kronig,
+                max_oversampling=self.max_oversampling,
+            )
+
+        super().__init__(oversampled_dublett, *args, **kwargs)
         self._set_paramhints_prefix()
+
+    def eval_dublett_components(self, params, x):
+        """Evaluate the final sampled primary and secondary peak profiles."""
+        values = params.valuesdict()
+        names = (
+            'amplitude', 'sigma', 'gamma', 'gaussian_sigma', 'center',
+            'soc', 'height_ratio', 'fct_coster_kronig'
+        )
+        arguments = [values[self.prefix + name] for name in names]
+        return dublett_components(
+            x, *arguments, max_oversampling=self.max_oversampling
+        )
+
+    def ratio_diagnostics(self, params, x):
+        """Return requested and sampled ratios for the supplied fit range."""
+        primary, secondary = self.eval_dublett_components(params, x)
+        primary_area = abs(trapezoid(primary, x))
+        secondary_area = abs(trapezoid(secondary, x))
+        values = params.valuesdict()
+        required, used = _dublett_oversampling(
+            x,
+            values[self.prefix + 'sigma'],
+            values[self.prefix + 'fct_coster_kronig'],
+            self.max_oversampling,
+        )
+        return {
+            'requested_area_ratio': params[
+                self.prefix + 'height_ratio'
+            ].value,
+            'sampled_area_ratio': secondary_area / primary_area,
+            'sampled_height_ratio': np.max(secondary) / np.max(primary),
+            'required_oversampling': required,
+            'used_oversampling': used,
+            'oversampling_limit_reached': required > used,
+        }
+
+    def ratio_report(self, params, x):
+        """Format requested and actual doublet ratios for reporting."""
+        diagnostics = self.ratio_diagnostics(params, x)
+        return (
+            f"requested area ratio:      "
+            f"{diagnostics['requested_area_ratio']:.6f}\n"
+            f"sampled area ratio:        "
+            f"{diagnostics['sampled_area_ratio']:.6f}\n"
+            f"sampled peak-height ratio: "
+            f"{diagnostics['sampled_height_ratio']:.6f}\n"
+            f"oversampling used/required: "
+            f"{diagnostics['used_oversampling']}x/"
+            f"{diagnostics['required_oversampling']}x"
+        )
 
     def _set_paramhints_prefix(self):
         self.set_param_hint('amplitude', value=100, min=0)
@@ -243,6 +310,38 @@ class ConvGaussianDoniachDublett(lmfit.model.Model):
         return lmfit.models.update_param_vals(params, self.prefix, **kwargs)
 
 
+def dublett_ratio_diagnostics(result, x=None):
+    """Return sampled-ratio diagnostics for every dublett in a fit result."""
+    if x is None:
+        x = result.userkws.get('x')
+    if x is None:
+        raise ValueError("x must be supplied or available in result.userkws")
+
+    diagnostics = {}
+    for component in result.model.components:
+        if isinstance(component, ConvGaussianDoniachDublett):
+            label = component.prefix.rstrip('_') or 'dublett'
+            diagnostics[label] = component.ratio_diagnostics(result.params, x)
+    return diagnostics
+
+
+def dublett_ratio_report(result, x=None):
+    """Format actual sampled ratios for every dublett in a fit result."""
+    reports = []
+    report_x = result.userkws.get('x') if x is None else x
+    diagnostics = dublett_ratio_diagnostics(result, x=report_x)
+    components = {
+        (component.prefix.rstrip('_') or 'dublett'): component
+        for component in result.model.components
+        if isinstance(component, ConvGaussianDoniachDublett)
+    }
+    for label in diagnostics:
+        component = components[label]
+        reports.append(
+            f"{label}:\n{component.ratio_report(result.params, report_x)}"
+        )
+    return "\n\n".join(reports)
+
 class FermiEdgeModel(lmfit.model.Model):
     __doc__ = ("""
         This Model function is intended to fit the Fermi edge in XPS spectra.
@@ -278,7 +377,7 @@ class FermiEdgeModel(lmfit.model.Model):
             +----------------+---------------+----------------------------------------------------------------------------------------+
             | amplitude      | :obj:`float`  | step height :math:`A` of the fermi edge.                                               |
             +----------------+---------------+----------------------------------------------------------------------------------------+
-            | center         | :obj:`float`  | position :math:`\mu` of the edge (Fermi level)                                         |
+            | center         | :obj:`float`  | position :math:`\\mu` of the edge (Fermi level)                                         |
             +----------------+---------------+----------------------------------------------------------------------------------------+
             | kt             | :obj:`float`  | Boltzmann constant in eV/K multiplied by temperature T in Kelvin (:math:`k_B T`)       |
             +----------------+---------------+----------------------------------------------------------------------------------------+
