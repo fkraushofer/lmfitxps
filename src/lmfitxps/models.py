@@ -306,6 +306,36 @@ class ConvGaussianDoniachDublett(lmfit.model.Model):
         return lmfit.models.update_param_vals(params, self.prefix, **kwargs)
 
 
+def dublett_ratio_diagnostics(result, x=None):
+    """Return sampled-ratio diagnostics for every dublett in a fit result."""
+    if x is None:
+        x = result.userkws.get('x')
+    if x is None:
+        raise ValueError("x must be supplied or available in result.userkws")
+
+    diagnostics = {}
+    for component in result.model.components:
+        if isinstance(component, ConvGaussianDoniachDublett):
+            label = component.prefix.rstrip('_') or 'dublett'
+            diagnostics[label] = component.ratio_diagnostics(result.params, x)
+    return diagnostics
+
+
+def dublett_ratio_report(result, x=None):
+    """Format actual sampled ratios for every dublett in a fit result."""
+    reports = []
+    diagnostics = dublett_ratio_diagnostics(result, x=x)
+    components = {
+        (component.prefix.rstrip('_') or 'dublett'): component
+        for component in result.model.components
+        if isinstance(component, ConvGaussianDoniachDublett)
+    }
+    for label, values in diagnostics.items():
+        component = components[label]
+        reports.append(f"{label}:\\n{component.ratio_report(result.params, x or result.userkws['x'])}")
+    return "\\n\\n".join(reports)
+
+
 class FermiEdgeModel(lmfit.model.Model):
     __doc__ = ("""
         This Model function is intended to fit the Fermi edge in XPS spectra.
