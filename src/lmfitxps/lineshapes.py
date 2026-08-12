@@ -20,13 +20,17 @@ def _dublett_oversampling(x, sigma, fct_coster_kronig, max_oversampling):
     if np.any(steps == 0) or not np.all(np.sign(steps) == np.sign(steps[0])):
         raise ValueError("x must be strictly monotonic")
 
-    data_step = np.max(np.abs(steps))
+    absolute_steps = np.abs(steps)
+    data_step = np.median(absolute_steps)
+    if not np.allclose(absolute_steps, data_step, rtol=1e-7, atol=1e-12):
+        raise ValueError("x must be uniformly spaced")
     narrowest_sigma = sigma * min(1.0, fct_coster_kronig)
     if narrowest_sigma <= 0:
         required = max_oversampling
     else:
         # Aim for ten samples across the narrowest intrinsic width.
-        required = max(1, int(np.ceil(10 * data_step / narrowest_sigma)))
+        ratio = 10 * data_step / narrowest_sigma
+        required = max(1, int(np.ceil(ratio - 1e-12)))
     return required, min(required, max_oversampling)
 
 
