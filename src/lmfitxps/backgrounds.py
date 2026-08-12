@@ -126,9 +126,9 @@ def shirley(y, k, const):
         +============+===============+====================================================================================================+
         | y          | :obj:`array`  | 1D-array containing the y-values (intensities) of the spectrum.                                    |
         +------------+---------------+----------------------------------------------------------------------------------------------------+
-        | k          | :obj:`float`  | Dimensionless Shirley scaling factor; :math:`k=1` matches the left background endpoint to `y[0]`. |
+        | k          | :obj:`float`  | Dimensionless Shirley scaling factor; :math:`k=1` matches the left background endpoint to `y[0]`.  |
         +------------+---------------+----------------------------------------------------------------------------------------------------+
-        | const      | :obj:`float`  | Constant right-hand background level, often set to :math:`I_{\text{right}}`.                      |
+        | const      | :obj:`float`  | Constant right-hand background level, often set to :math:`I_{\text{right}}`.                       |
         +------------+---------------+----------------------------------------------------------------------------------------------------+
 
     Note
