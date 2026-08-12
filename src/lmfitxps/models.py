@@ -450,23 +450,18 @@ class ShirleyBG(lmfit.model.Model):
     This implementation calculates the Shirley background by integrating the step characteristic of the spectrum.
     For further details, please refer to Shirley [6]_ or Jansson et al. [7]_.
     
-    The Shirley background is calculated using the following integral:
-    
+    The active Shirley background is calculated self-consistently from the normalized cumulative integral of the intensity above the current background:
+
     .. math::
         :label: shirley
-        
-        B_S(E)=k\\cdot \\int_{E}^{E_{\\text{right}}}\\left[I(E')-I_{\\text{right}}\\right] \\, dE'
-        
-    The Shirley background is typically calculated iteratively using the following formula:
 
-    .. math::
-        :label: shirley2
+        B_{S,n}(E) = c + k [I(E_{\\text{left}}) - c]
+        \\frac{\\int_E^{E_{\\text{right}}}
+        [I(E') - B_{S,n-1}(E')] \\, dE'}
+        {\\int_{E_{\\text{left}}}^{E_{\\text{right}}}
+        [I(E') - B_{S,n-1}(E')] \\, dE'}.
 
-        B_{S, n}(E) = k_n \\cdot \\int_{E}^{E_{\\text{right}}} [I(E') - I_{\\text{right}} - B_{S, n-1}(E')] \\, dE'
-
-    The iterative process continues until the difference :math:`B_{S, n}(E) - B_{S, n-1}(E)` becomes smaller than a specified tolerance value :math:`tol`. This approach is implemented in the function referenced as :ref:`shirley_calculate`.
-
-    However, calculating the Shirley background before fitting and calculating it with high precision in each fitting step are not practically meaningful. Instead, the Shirley background is computed according to the equation :math:numref:`shirley` within each iteration of the model optimization. This ensures that the Shirley background is adaptively determined during the fitting process, preserving the iterative concept of its calculation.
+    Here, :math:`c` is the right-hand background level and :math:`k` is a dimensionless scaling factor. At :math:`k=0`, the background is constant at :math:`c`; at :math:`k=1`, its left-hand endpoint equals the leftmost data intensity. The normalization prevents the active background from locally following peaks or noise.
 
     .. table:: Model-specific available parameters
         :widths: auto
@@ -478,9 +473,9 @@ class ShirleyBG(lmfit.model.Model):
         +------------+---------------+----------------------------------------------------------------------------------------------------+
         | y          | :obj:`array`  | 1D-array containing the y-values (intensities) of the spectrum.                                    |
         +------------+---------------+----------------------------------------------------------------------------------------------------+
-        | k          | :obj:`float`  | Shirley parameter :math:`k`, determines step-height of the Shirley background.                     |
+        | k          | :obj:`float`  | Dimensionless Shirley factor; :math:`k=1` matches the left background endpoint to the data.        |
         +------------+---------------+----------------------------------------------------------------------------------------------------+
-        | const      | :obj:`float`  | Constant value added to the step-like Shirley background, often set to :math:`I_{\\text{right}}`.   |
+        | const      | :obj:`float`  | Constant right-hand background level, often set to :math:`I_{\\text{right}}`.                      |
         +------------+---------------+----------------------------------------------------------------------------------------------------+
 
         
@@ -510,8 +505,8 @@ class ShirleyBG(lmfit.model.Model):
         The method sets initial values and constraints for the parameters :math:`k` and :math: `const`.
 
         """
-        self.set_param_hint('k', value=0.03)
-        self.set_param_hint('const', value=1000)
+        self.set_param_hint('k', value=1, min=0)
+        self.set_param_hint('const', value=0)
 
     def guess(self, data, x=None, **kwargs):
         """
@@ -532,7 +527,8 @@ class ShirleyBG(lmfit.model.Model):
         """
         if x is None:
             return
-        params = self.make_params(k=0.03, const=1000)
+        const = data[-1]
+        params = self.make_params(k=1, const=const)
         return lmfit.models.update_param_vals(params, self.prefix, **kwargs)
 
 

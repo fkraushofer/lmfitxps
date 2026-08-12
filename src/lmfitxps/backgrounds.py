@@ -108,26 +108,15 @@ def shirley(y, k, const):
     Calculates the Shirley background for X-ray photoelectron spectroscopy (XPS) spectra by integrating the step characteristic of the spectrum.
     For further details, please refer to Shirley [5]_ or Jansson et al. [6]_.
 
-    Hint
-    ----
-    The Shirley background is typically calculated iteratively using the following formula:
+    The active Shirley background is calculated self-consistently from the normalized cumulative integral of the intensity above the current background:
 
     .. math::
 
-        B_{S, n}(E) = k_n \\cdot \\int_{E}^{E_{\\text{right}}} [I(E') - I_{\\text{right}} - B_{S, n-1}(E')] \\, dE'
+        B_{S,n}(E_i) = I_{\text{right}} + k \left[I(E_{\text{left}}) - I_{\text{right}}\right]
+        \frac{\sum_{j=i}^{N-2} [I(E_j) - B_{S,n-1}(E_j)]}
+        {\sum_{j=0}^{N-2} [I(E_j) - B_{S,n-1}(E_j)]}.
 
-    Using this iterative process, makes it necessary to calculate the Shirley background before the fitting procedure, which is not always meaningful.
-    If you want to use this approach, please use the :ref:`shirley_calculate` function.
-
-
-    Here the Shirley background is computed according to:
-
-    .. math::
-
-        B_S(E)=k\\cdot \\int_{E}^{E_{\\text{right}}}\\left[I(E')-I_{\\text{right}}\\right] \\, dE'
-
-    In the actual implementation of the function, :math:`I_{\\text{right}}` corresponds to `const` and is substracted from the intensity data y (:math:`I(E)`) before calculating the integral by summing over the intensities.
-    This approach allows to include the Shirley background into the fitting model (e.g. as implemented in the :ref:`ShirleyBG` lmfitxps model) and to be adaptively determined during the fitting process, while still preserving the iterative concept of the Shirley's background calculation.
+    In the actual implementation, :math:`I_{\text{right}}` corresponds to `const`, and :math:`I(E_{\text{left}})` is the first value in `y`. Thus, :math:`k` is a dimensionless scaling factor: :math:`k=0` gives a constant background, while :math:`k=1` makes the left-hand endpoint of the background equal to the leftmost data point. The residual is not clipped, so positive and negative noise are treated symmetrically.
 
     .. table::
         :widths: auto
@@ -137,18 +126,44 @@ def shirley(y, k, const):
         +============+===============+====================================================================================================+
         | y          | :obj:`array`  | 1D-array containing the y-values (intensities) of the spectrum.                                    |
         +------------+---------------+----------------------------------------------------------------------------------------------------+
-        | k          | :obj:`float`  | Shirley parameter :math:`k`, determines step-height of the Shirley background.                     |
+        | k          | :obj:`float`  | Dimensionless Shirley scaling factor; :math:`k=1` matches the left background endpoint to `y[0]`.  |
         +------------+---------------+----------------------------------------------------------------------------------------------------+
-        | const      | :obj:`float`  | Constant value added to the step-like Shirley background, often set to :math:`I_{\\text{right}}`.   |
+        | const      | :obj:`float`  | Constant right-hand background level, often set to :math:`I_{\text{right}}`.                       |
         +------------+---------------+----------------------------------------------------------------------------------------------------+
+
     Note
     ----
     This function is used as the model function in the :ref:`ShirleyBG` lmfitxps model.
 
     """
-    y_right = const
-    bg = np.cumsum(y[::-1])[::-1]
-    return k * bg + y_right
+    y = np.asarray(y)
+    dtype = np.result_type(y, k, const, float)
+    if not y.size:
+        return np.empty_like(y, dtype=dtype)
+    if y.size == 1 or k == 0:
+        return np.full_like(y, const, dtype=dtype)
+
+    step = k * (y[0] - const)
+
+    # Start from a linear interpolation between the two fixed endpoint
+    # values. The iteration updates only the shape between them.
+    background = np.linspace(const + step, const, y.size, dtype=dtype)
+    for _ in range(100):
+        residual = y - background
+        cumulative = np.concatenate((
+            np.cumsum(residual[:-1][::-1], dtype=dtype)[::-1],
+            np.zeros(1, dtype=dtype),
+        ))
+        total = cumulative[0]
+        if np.isclose(total, 0):
+            return np.full_like(y, const, dtype=dtype)
+
+        new_background = const + step * cumulative / total
+        if np.allclose(new_background, background, rtol=1e-8, atol=1e-10):
+            return new_background
+        background = new_background
+
+    return background
 
 def slope(y, k):
     """
