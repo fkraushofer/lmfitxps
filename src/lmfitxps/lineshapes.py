@@ -22,7 +22,7 @@ def _dublett_oversampling(x, sigma, fct_coster_kronig, max_oversampling):
 
     absolute_steps = np.abs(steps)
     data_step = np.median(absolute_steps)
-    if not np.allclose(absolute_steps, data_step, rtol=1e-7, atol=1e-12):
+    if not np.allclose(absolute_steps, data_step, rtol=0.01, atol=1e-12):
         raise ValueError("x must be uniformly spaced")
     narrowest_sigma = sigma * min(1.0, fct_coster_kronig)
     if narrowest_sigma <= 0:
