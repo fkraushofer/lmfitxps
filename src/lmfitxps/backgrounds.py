@@ -146,9 +146,9 @@ def shirley(y, k, const):
     This function is used as the model function in the :ref:`ShirleyBG` lmfitxps model.
 
     """
-    y_right = const
-    bg = np.cumsum(y[::-1])[::-1]
-    return k * bg + y_right
+    y_subtracted = y - const
+    bg = np.cumsum(y_subtracted[::-1])[::-1]
+    return const + k * bg
 
 def slope(y, k):
     """
