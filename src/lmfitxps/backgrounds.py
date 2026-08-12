@@ -105,34 +105,29 @@ tougaard = tougaard_closure()
 
 def shirley(y, k, const):
     """
-    Calculates a self-consistent active Shirley background for X-ray
-    photoelectron spectroscopy (XPS) spectra.
+    Calculates a normalized, self-consistent active Shirley background for
+    X-ray photoelectron spectroscopy (XPS) spectra.
 
-    The background is defined implicitly by
-
-    .. math::
-
-        B_S(E_i) = \mathrm{const}
-        + k \sum_{j=i}^{N-2} [I(E_j) - B_S(E_j)],
-
-    with :math:`B_S(E_{N-1}) = \mathrm{const}`.  Solving this equation
-    backwards gives
+    The background is defined iteratively by
 
     .. math::
 
-        B_S(E_i) = \frac{B_S(E_{i+1}) + k I(E_i)}{1 + k}.
+        B_{S,n}(E_i) = \mathrm{const}
+        + k \frac{\sum_{j=i}^{N-2} [I(E_j) - B_{S,n-1}(E_j)]}
+        {\sum_{j=0}^{N-2} [I(E_j) - B_{S,n-1}(E_j)]}.
 
-    Thus, the integral is evaluated over the intensity above the current
-    background.  Both `k` and `const` remain active fit parameters:
-    `const` fixes the right-hand offset, while `k` controls the response
-    of the step without introducing a linear component.
+    Thus, `const` fixes the right-hand background level and `k` is the
+    total background step between the two ends of the spectrum. The
+    normalization prevents the background from locally following peaks or
+    noise. The residual is deliberately not clipped, so positive and
+    negative noise are treated symmetrically.
 
     Parameters
     ----------
     y : array
         Intensities of the spectrum.
     k : float
-        Shirley scaling parameter.
+        Total Shirley background step.
     const : float
         Constant right-hand background level.
 
@@ -147,14 +142,31 @@ def shirley(y, k, const):
     lmfitxps model.
     """
     y = np.asarray(y)
-    bg = np.empty_like(y, dtype=np.result_type(y, k, const, float))
+    dtype = np.result_type(y, k, const, float)
     if not y.size:
-        return bg
+        return np.empty_like(y, dtype=dtype)
+    if y.size == 1 or k == 0:
+        return np.full_like(y, const, dtype=dtype)
 
-    bg[-1] = const
-    for i in range(y.size - 2, -1, -1):
-        bg[i] = (bg[i + 1] + k * y[i]) / (1 + k)
-    return bg
+    # Start from a linear interpolation between the two fixed endpoint
+    # values. The iteration updates only the shape between them.
+    background = np.linspace(const + k, const, y.size, dtype=dtype)
+    for _ in range(100):
+        residual = y - background
+        cumulative = np.concatenate((
+            np.cumsum(residual[:-1][::-1], dtype=dtype)[::-1],
+            np.zeros(1, dtype=dtype),
+        ))
+        total = cumulative[0]
+        if np.isclose(total, 0):
+            return np.full_like(y, const, dtype=dtype)
+
+        new_background = const + k * cumulative / total
+        if np.allclose(new_background, background, rtol=1e-8, atol=1e-10):
+            return new_background
+        background = new_background
+
+    return background
 
 def slope(y, k):
     """
