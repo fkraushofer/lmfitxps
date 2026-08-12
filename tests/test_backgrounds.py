@@ -16,7 +16,7 @@ def test_shirley_same_output(shirley_func):
     data = np.genfromtxt('examples/clean_Au_4f.csv', delimiter=',', skip_header=1)
     x = data[:, 0]
     y = data[:, 1]
-    k = 0.003
+    k = 1.0
     const = y[-1]
 
     result1 = shirley_func(y,k,const)
@@ -27,7 +27,7 @@ def test_shirley_same_output(shirley_func):
 
 def test_shirley_is_normalized_and_self_consistent(shirley_func):
     y = np.array([10.0, 8.0, 6.0, 4.0])
-    k = 3.0
+    k = 0.75
     const = 2.0
 
     result = shirley_func(y, k=k, const=const)
@@ -36,17 +36,18 @@ def test_shirley_is_normalized_and_self_consistent(shirley_func):
         np.cumsum(residual[:-1][::-1])[::-1],
         [0.0],
     ))
-    expected = const + k * cumulative / cumulative[0]
+    step = k * (y[0] - const)
+    expected = const + step * cumulative / cumulative[0]
 
     assert np.allclose(result, expected)
-    assert result[0] == pytest.approx(const + k)
+    assert result[0] == pytest.approx(const + step)
     assert result[-1] == pytest.approx(const)
 
 
 def test_shirley_is_monotonic_for_noise_free_spectrum(shirley_func):
     y = np.array([10.0, 8.0, 6.0, 4.0])
 
-    result = shirley_func(y, k=3.0, const=2.0)
+    result = shirley_func(y, k=1.0, const=2.0)
 
     assert np.all(np.diff(result) <= 0)
 
@@ -54,12 +55,14 @@ def test_shirley_is_monotonic_for_noise_free_spectrum(shirley_func):
 def test_shirley_const_changes_integral_shape(shirley_func):
     y = np.array([10.0, 8.0, 6.0, 4.0])
 
-    low_const = shirley_func(y, k=3.0, const=2.0)
-    high_const = shirley_func(y, k=3.0, const=3.0)
+    low_const = shirley_func(y, k=0.5, const=2.0)
+    high_const = shirley_func(y, k=0.5, const=3.0)
 
-    # Both endpoints translate by one, but the self-consistent interior
-    # changes shape because const is subtracted inside the integral.
-    assert high_const[[0, -1]] == pytest.approx(low_const[[0, -1]] + 1.0)
+    # const changes both the right endpoint and the intensity-valued step,
+    # and therefore also changes the self-consistent interior shape.
+    assert low_const[0] == pytest.approx(6.0)
+    assert high_const[0] == pytest.approx(6.5)
+    assert high_const[-1] == pytest.approx(3.0)
     assert not np.allclose(high_const[1:-1], low_const[1:-1] + 1.0)
 
 
@@ -104,7 +107,7 @@ def test_fit_shirley(shirley_model, shirley_calculate_func):
     y = data[:, 1]
     params = lmfit.Parameters()
     y_shirley = shirley_calculate_func(x=x, y=y, tol=1e-8, maxit=100)
-    params.add('k', value=y_shirley[0] - y_shirley[-1], min=0)
+    params.add('k', value=1, min=0)
     params.add('const', value=y_shirley[-1])
     eva= shirley_model.eval(data=y, params=params, y=y)
     result = shirley_model.fit(y_shirley, params, y=y, weights=1/np.sqrt(y))
