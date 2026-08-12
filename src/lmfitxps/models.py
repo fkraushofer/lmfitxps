@@ -462,6 +462,7 @@ class ShirleyBG(lmfit.model.Model):
         [I(E') - B_{S,n-1}(E')] \\, dE'}.
 
     Here, :math:`c` is the right-hand background level and :math:`k` is a dimensionless scaling factor. At :math:`k=0`, the background is constant at :math:`c`; at :math:`k=1`, its left-hand endpoint equals the leftmost data intensity. The normalization prevents the active background from locally following peaks or noise.
+
     .. table:: Model-specific available parameters
         :widths: auto
 
@@ -474,7 +475,7 @@ class ShirleyBG(lmfit.model.Model):
         +------------+---------------+----------------------------------------------------------------------------------------------------+
         | k          | :obj:`float`  | Dimensionless Shirley factor; :math:`k=1` matches the left background endpoint to the data.        |
         +------------+---------------+----------------------------------------------------------------------------------------------------+
-        | const      | :obj:`float`  | Constant right-hand background level, often set to :math:`I_{\\text{right}}`.                     |
+        | const      | :obj:`float`  | Constant right-hand background level, often set to :math:`I_{\\text{right}}`.                      |
         +------------+---------------+----------------------------------------------------------------------------------------------------+
 
         
