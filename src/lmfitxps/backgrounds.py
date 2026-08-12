@@ -105,50 +105,56 @@ tougaard = tougaard_closure()
 
 def shirley(y, k, const):
     """
-    Calculates the Shirley background for X-ray photoelectron spectroscopy (XPS) spectra by integrating the step characteristic of the spectrum.
-    For further details, please refer to Shirley [5]_ or Jansson et al. [6]_.
+    Calculates a self-consistent active Shirley background for X-ray
+    photoelectron spectroscopy (XPS) spectra.
 
-    Hint
-    ----
-    The Shirley background is typically calculated iteratively using the following formula:
+    The background is defined implicitly by
 
     .. math::
 
-        B_{S, n}(E) = k_n \\cdot \\int_{E}^{E_{\\text{right}}} [I(E') - I_{\\text{right}} - B_{S, n-1}(E')] \\, dE'
+        B_S(E_i) = \mathrm{const}
+        + k \sum_{j=i}^{N-2} [I(E_j) - B_S(E_j)],
 
-    Using this iterative process, makes it necessary to calculate the Shirley background before the fitting procedure, which is not always meaningful.
-    If you want to use this approach, please use the :ref:`shirley_calculate` function.
-
-
-    Here the Shirley background is computed according to:
+    with :math:`B_S(E_{N-1}) = \mathrm{const}`.  Solving this equation
+    backwards gives
 
     .. math::
 
-        B_S(E)=k\\cdot \\int_{E}^{E_{\\text{right}}}\\left[I(E')-I_{\\text{right}}\\right] \\, dE'
+        B_S(E_i) = \frac{B_S(E_{i+1}) + k I(E_i)}{1 + k}.
 
-    In the actual implementation of the function, :math:`I_{\\text{right}}` corresponds to `const` and is substracted from the intensity data y (:math:`I(E)`) before calculating the integral by summing over the intensities.
-    This approach allows to include the Shirley background into the fitting model (e.g. as implemented in the :ref:`ShirleyBG` lmfitxps model) and to be adaptively determined during the fitting process, while still preserving the iterative concept of the Shirley's background calculation.
+    Thus, the integral is evaluated over the intensity above the current
+    background.  Both `k` and `const` remain active fit parameters:
+    `const` fixes the right-hand offset, while `k` controls the response
+    of the step without introducing a linear component.
 
-    .. table::
-        :widths: auto
+    Parameters
+    ----------
+    y : array
+        Intensities of the spectrum.
+    k : float
+        Shirley scaling parameter.
+    const : float
+        Constant right-hand background level.
 
-        +------------+---------------+----------------------------------------------------------------------------------------------------+
-        | Parameters | Type          | Description                                                                                        |
-        +============+===============+====================================================================================================+
-        | y          | :obj:`array`  | 1D-array containing the y-values (intensities) of the spectrum.                                    |
-        +------------+---------------+----------------------------------------------------------------------------------------------------+
-        | k          | :obj:`float`  | Shirley parameter :math:`k`, determines step-height of the Shirley background.                     |
-        +------------+---------------+----------------------------------------------------------------------------------------------------+
-        | const      | :obj:`float`  | Constant value added to the step-like Shirley background, often set to :math:`I_{\\text{right}}`.   |
-        +------------+---------------+----------------------------------------------------------------------------------------------------+
+    Returns
+    -------
+    numpy.ndarray
+        Self-consistent Shirley background.
+
     Note
     ----
-    This function is used as the model function in the :ref:`ShirleyBG` lmfitxps model.
-
+    This function is used as the model function in the :ref:`ShirleyBG`
+    lmfitxps model.
     """
-    y_subtracted = y - const
-    bg = np.cumsum(y_subtracted[::-1])[::-1]
-    return const + k * bg
+    y = np.asarray(y)
+    bg = np.empty_like(y, dtype=np.result_type(y, k, const, float))
+    if not y.size:
+        return bg
+
+    bg[-1] = const
+    for i in range(y.size - 2, -1, -1):
+        bg[i] = (bg[i + 1] + k * y[i]) / (1 + k)
+    return bg
 
 def slope(y, k):
     """
