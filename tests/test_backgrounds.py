@@ -104,8 +104,8 @@ def test_fit_shirley(shirley_model, shirley_calculate_func):
     y = data[:, 1]
     params = lmfit.Parameters()
     y_shirley = shirley_calculate_func(x=x, y=y, tol=1e-8, maxit=100)
-    params.add('k', value=0.0015)
-    params.add('const', value=np.min(y))
+    params.add('k', value=y_shirley[0] - y_shirley[-1], min=0)
+    params.add('const', value=y_shirley[-1])
     eva= shirley_model.eval(data=y, params=params, y=y)
     result = shirley_model.fit(y_shirley, params, y=y, weights=1/np.sqrt(y))
     assert result.success
