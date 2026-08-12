@@ -25,6 +25,23 @@ def test_shirley_same_output(shirley_func):
     assert np.array_equal(result1, result2)
 
 
+def test_shirley_subtracts_const_before_integration(shirley_func):
+    y = np.array([10.0, 7.0, 4.0])
+
+    result = shirley_func(y, k=0.5, const=2.0)
+
+    # const + k * reverse_cumsum(y - const)
+    assert np.allclose(result, [9.5, 5.5, 3.0])
+
+
+def test_shirley_zero_k_is_constant_offset(shirley_func):
+    y = np.array([10.0, 7.0, 4.0])
+
+    result = shirley_func(y, k=0.0, const=2.0)
+
+    assert np.allclose(result, 2.0)
+
+
 @pytest.fixture
 def shirley_calculate_func():
     def create_shirley_calculate(x,y,tol,maxit):
