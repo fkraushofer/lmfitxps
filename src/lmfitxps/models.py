@@ -1,6 +1,6 @@
 import numpy as np
 from lmfit.lineshapes import doniach, gaussian, thermal_distribution
-from .lineshapes import (singlett, dublett, dublett_components, fermi_edge,\n                         convolve, fft_convolve)
+from .lineshapes import (singlett, dublett, dublett_components,\n                         _dublett_oversampling, fermi_edge, convolve,\n                         fft_convolve)
 from .backgrounds import tougaard, slope, shirley
 from lmfit import Model
 import lmfit
@@ -223,12 +223,22 @@ class ConvGaussianDoniachDublett(lmfit.model.Model):
         primary, secondary = self.eval_dublett_components(params, x)
         primary_area = abs(np.trapz(primary, x))
         secondary_area = abs(np.trapz(secondary, x))
+        values = params.valuesdict()
+        required, used = _dublett_oversampling(
+            x,
+            values[self.prefix + 'sigma'],
+            values[self.prefix + 'fct_coster_kronig'],
+            self.max_oversampling,
+        )
         return {
             'requested_area_ratio': params[
                 self.prefix + 'height_ratio'
             ].value,
             'sampled_area_ratio': secondary_area / primary_area,
             'sampled_height_ratio': np.max(secondary) / np.max(primary),
+            'required_oversampling': required,
+            'used_oversampling': used,
+            'oversampling_limit_reached': required > used,
         }
 
     def ratio_report(self, params, x):
@@ -240,7 +250,10 @@ class ConvGaussianDoniachDublett(lmfit.model.Model):
             f"sampled area ratio:        "
             f"{diagnostics['sampled_area_ratio']:.6f}\\n"
             f"sampled peak-height ratio: "
-            f"{diagnostics['sampled_height_ratio']:.6f}"
+            f"{diagnostics['sampled_height_ratio']:.6f}\\n"
+            f"oversampling used/required: "
+            f"{diagnostics['used_oversampling']}x/"
+            f"{diagnostics['required_oversampling']}x"
         )
 
     def _set_paramhints_prefix(self):
