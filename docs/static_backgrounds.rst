@@ -3,13 +3,12 @@ Static backgrounds
 .. index:: backgrounds
 
 
-The naming of the following two background functions as "static backgrounds" might lead to some confusion. The functions :ref:`shirley_calculate` and :ref:`tougaard_calculate` are referred to as static simply because they aren't designed to be directly integrated into the fitting model itself.
+Static backgrounds are calculated separately from peak fitting. They can be
+subtracted before fitting or integrating the remaining signal. In contrast,
+the models in :ref:`BGModels` allow background parameters to vary during a fit.
 
-Because these functions are not part of the fit model, they need to be applied separately to the data, removing the background before applying the Levenberg–Marquardt algorithm through lmfit. Unlike the approach in :ref:`BGModels`, where the background is dynamically adjusted and optimized at each iteration step of model optimization, here the background has to be removed before the fitting process begins.
-
-However, these static backgrounds are implemented iteratively, allowing their scaling parameters to be optimized for the input dataset.
-
-Especially in cases where the fitting model is complex, applying these static background functions to the dataset can aid in approximating suitable starting parameters for the :ref:`BGModels` within the fit model.
+The functions below use iterative calculations. The root-based Shirley
+function can also be evaluated directly, without an lmfit model.
 
 .. _shirley_calculate:
 
@@ -18,6 +17,29 @@ ____________________________
 
 
 .. autofunction:: lmfitxps.backgrounds.shirley_calculate
+
+Using the root solver without fitting
+------------------------------------
+
+``shirley_calculate`` retains its explicit iterative algorithm, including
+``tol``, ``maxit`` and the optional endpoint ``bounds``. To use the root solver
+and its coefficient-limit and monotonic options instead::
+
+    from lmfitxps.backgrounds import shirley
+
+    # Uniformly spaced x, with the low-binding-energy endpoint last.
+    background = shirley(y, k=1, const=y[-1], x=x)
+    signal = y - background
+
+This requests both data endpoints; the default automatic limit may prevent
+reaching the first one. Set ``alpha_max=None`` to require an uncapped root
+(an unattainable endpoint then raises ValueError), or ``monotonic=True`` to
+exclude negative contributions to the background integral.
+
+The two functions use different discretizations: ``shirley_calculate`` uses
+trapezoidal integration, whereas ``shirley`` uses a uniform-grid rectangle
+sum. Their results therefore need not match exactly. The direct root function
+does not provide the ``bounds`` handling of ``shirley_calculate``.
 
 .. _tougaard_calculate:
 
