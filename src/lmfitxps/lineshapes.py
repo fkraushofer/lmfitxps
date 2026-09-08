@@ -69,16 +69,19 @@ def dublett_components(
         )
     )
 
+    # Reflect each intrinsic profile about its own center for binding energy;
+    # reversing the symmetric Gaussian kernel cannot reverse the Doniach tail.
     primary = fft_convolve(
         doniach(
-            x_internal, amplitude=1, center=center, sigma=sigma, gamma=gamma
+            2 * center - x_internal if is_binding_energy else x_internal,
+            amplitude=1, center=center, sigma=sigma, gamma=gamma
         ),
         kernel,
         is_binding_energy=is_binding_energy,
     )
     secondary = fft_convolve(
         doniach(
-            x_internal,
+            2 * second_center - x_internal if is_binding_energy else x_internal,
             amplitude=height_ratio,
             center=second_center,
             sigma=fct_coster_kronig * sigma,
@@ -114,13 +117,14 @@ def dublett(
     Parameters
     ----------
     x: array-like
-        Array containing the energy of the spectrum to fit.
+        Energy array: descending binding energy or ascending kinetic energy.
     amplitude: float
         Maximum amplitude of the combined convolved profile.
     sigma: float
         Sigma of the primary Doniach profile.
     gamma: float
-        Asymmetry factor of both Doniach profiles.
+        Asymmetry factor of both Doniach profiles. Positive values give a
+        tail toward higher binding energy (lower kinetic energy).
     gaussian_sigma: float
         Sigma of the Gaussian convolution kernel.
     center: float
@@ -154,14 +158,15 @@ def singlett(x, amplitude, sigma, gamma, gaussian_sigma, center):
     Parameters
     ----------
     x: array-like
-        Array containing the energy of the spectrum to fit.  Works for both, kinetic+binding energy scaled data.
+        Energy array: descending binding energy or ascending kinetic energy.
     amplitude: float
         factor used to scale the calculated convolution to the measured spectrum. This factor is used as
         the amplitude of the Doniach profile.
     sigma: float
         Sigma of the Doniach profile
     gamma: float
-        asymmetry factor gamma of the Doniach profile
+        Asymmetry factor of the Doniach profile. Positive values give a
+        tail toward higher binding energy (lower kinetic energy).
     gaussian_sigma: float
         sigma of the gaussian profile which is used as the convolution kernel
     center: float
@@ -172,8 +177,12 @@ def singlett(x, amplitude, sigma, gamma, gaussian_sigma, center):
     array-type
         convolution of a doniach profile and a gaussian profile
     """
+    x = np.asarray(x, dtype=float)
     is_binding_energy= x[-1] < x[0]
-    conv_temp = fft_convolve(doniach(x, amplitude=1, center=center, sigma=sigma, gamma=gamma),
+    # lmfit's Doniach tail points toward lower numerical energy. Reflect
+    # the profile about its center on the binding-energy scale.
+    doniach_x = 2 * center - x if is_binding_energy else x
+    conv_temp = fft_convolve(doniach(doniach_x, amplitude=1, center=center, sigma=sigma, gamma=gamma),
                                  1 / (np.sqrt(2 * np.pi) * gaussian_sigma) * gaussian(x, amplitude=1, center=np.mean(x),
                                                                                       sigma=gaussian_sigma), is_binding_energy=is_binding_energy)
     return amplitude * conv_temp / max(conv_temp)
