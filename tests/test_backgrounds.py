@@ -10,7 +10,7 @@ import pytest
 @pytest.fixture
 def shirley_func():
     def create_shirley(*args, **kwargs):
-        return backgrounds.shirley(*args, **kwargs)
+        return backgrounds.shirley(*args, alpha_max=None, **kwargs)
     return create_shirley
 def test_shirley_same_output(shirley_func):
     data = np.genfromtxt('examples/clean_Au_4f.csv', delimiter=',', skip_header=1)
@@ -45,7 +45,7 @@ def test_shirley_is_normalized_and_self_consistent(shirley_func):
 
 
 def test_shirley_is_monotonic_for_noise_free_spectrum(shirley_func):
-    y = np.array([10.0, 8.0, 6.0, 4.0])
+    y = np.array([10.0, 15.0, 12.0, 4.0])
 
     result = shirley_func(y, k=1.0, const=2.0)
 
@@ -100,7 +100,8 @@ def test_shirley_calculate_iterations(shirley_calculate_func, tol, maxit):
 @pytest.fixture()
 def shirley_model():
     """Return a Shirley model."""
-    return lmfit.Model(backgrounds.shirley, independent_vars=["y"])
+    return lmfit.Model(backgrounds.shirley, independent_vars=["y"],
+                       param_names=["k", "const"], alpha_max=None, monotonic=False)
 def test_fit_shirley(shirley_model, shirley_calculate_func):
     data = np.genfromtxt('examples/clean_Au_4f.csv', delimiter=',', skip_header=1)
     x = data[:, 0]
@@ -109,7 +110,7 @@ def test_fit_shirley(shirley_model, shirley_calculate_func):
     y_shirley = shirley_calculate_func(x=x, y=y, tol=1e-8, maxit=100)
     params.add('k', value=1, min=0)
     params.add('const', value=y_shirley[-1])
-    eva= shirley_model.eval(data=y, params=params, y=y)
+    eva= shirley_model.eval(data=y, params=params, y=y, x=x)
     result = shirley_model.fit(y_shirley, params, y=y, weights=1/np.sqrt(y))
     assert result.success
     assert result.errorbars

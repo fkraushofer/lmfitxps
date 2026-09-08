@@ -1,6 +1,9 @@
 import numpy as np
 import copy
+import warnings
+from functools import lru_cache
 from scipy.integrate import cumulative_trapezoid
+from scipy.optimize import brentq, minimize_scalar
 __author__ = "Julian Andreas Hochhaus, Florian Kraushofer"
 __copyright__ = "Copyright 2025"
 __credits__ = ["Julian Andreas Hochhaus", "Florian Kraushofer"]
@@ -103,67 +106,348 @@ def tougaard_closure():
 # Create the tougaard function with the closure
 tougaard = tougaard_closure()
 
-def shirley(y, k, const):
-    """
-    Calculates the Shirley background for X-ray photoelectron spectroscopy (XPS) spectra by integrating the step characteristic of the spectrum.
-    For further details, please refer to Shirley [5]_ or Jansson et al. [6]_.
+class ShirleyBackgroundWarning(RuntimeWarning):
+    """The Shirley coefficient limit prevents reaching a requested endpoint."""
 
-    The active Shirley background is calculated self-consistently from the normalized cumulative integral of the intensity above the current background:
+
+@lru_cache(maxsize=16)
+def _shirley_auto_qmax(residual, monotonic):
+    """First 20%-of-maximum sensitivity crossing after the global maximum.
+
+    Sensitivity is d(B[0]-const)/d ln(q), evaluated analytically through the
+    recurrence. Normalize intensity and orient a negative endpoint step before
+    measuring it. ln(alpha) differs from ln(q) by a constant on uniform grids.
+    The bounded cache avoids repeating the search when only k/peaks change.
+    """
+    residual = np.asarray(residual)
+    orientation = 1. if residual[0] >= 0 else -1.
+
+    def sensitivity(logq):
+        q = np.exp(logq)
+        t, w = 1/(1+q), q/(1+q)
+        b, derivative = np.zeros_like(q), np.zeros_like(q)
+        for value in residual[::-1]:
+            excess = value-b
+            if monotonic:
+                active = excess > 0
+                derivative = np.where(active, w*t*excess+t*derivative, derivative)
+                b = b+w*np.maximum(excess, 0)
+            else:
+                derivative = w*t*excess+t*derivative
+                b = w*value+t*b
+        return orientation*derivative
+
+    # The asymptotic tails lie far beyond one-point to full-window scales.
+    grid = np.linspace(np.log(1e-12/max(1, len(residual))), np.log(1e12), 401)
+    values = sensitivity(grid)
+    peak = int(np.argmax(values))
+    if peak == 0 or peak == len(grid)-1 or values[peak] <= 0:
+        raise ValueError("Cannot resolve the automatic Shirley sensitivity maximum; "
+                         "supply an explicit alpha_max")
+    optimum = minimize_scalar(lambda z: -float(sensitivity(z)),
+                              bounds=(grid[peak-1], grid[peak+1]), method='bounded',
+                              options={'xatol': 1e-10})
+    threshold = .2*float(sensitivity(optimum.x))
+    left = optimum.x
+    for right in grid[grid > left]:
+        if sensitivity(right) <= threshold:
+            root = brentq(lambda z: float(sensitivity(z))-threshold, left, right,
+                          xtol=1e-12)
+            return float(np.exp(root))
+        left = right
+    raise ValueError("Cannot resolve the automatic Shirley slope limit; "
+                     "supply an explicit alpha_max")
+
+
+def shirley(y, k, const, *, x=None, monotonic=False, alpha_max="auto"):
+    r"""Calculate the self-consistent Shirley background for XPS spectra.
+
+    For further details, please refer to Shirley [5]_ or Jansson et al. [6]_.
+    The normalized background satisfies:
 
     .. math::
 
-        B_{S,n}(E_i) = I_{\text{right}} + k \left[I(E_{\text{left}}) - I_{\text{right}}\right]
-        \frac{\sum_{j=i}^{N-2} [I(E_j) - B_{S,n-1}(E_j)]}
-        {\sum_{j=0}^{N-2} [I(E_j) - B_{S,n-1}(E_j)]}.
-
-    In the actual implementation, :math:`I_{\text{right}}` corresponds to `const`, and :math:`I(E_{\text{left}})` is the first value in `y`. Thus, :math:`k` is a dimensionless scaling factor: :math:`k=0` gives a constant background, while :math:`k=1` makes the left-hand endpoint of the background equal to the leftmost data point. The residual is not clipped, so positive and negative noise are treated symmetrically.
+        B_i = c + k(y_0-c)
+        \frac{\sum_{j=i}^{N-2}(y_j-B_j)}{\sum_{j=0}^{N-2}(y_j-B_j)}.
 
     .. table::
         :widths: auto
+        :class: parameter-table
 
-        +------------+---------------+----------------------------------------------------------------------------------------------------+
-        | Parameters | Type          | Description                                                                                        |
-        +============+===============+====================================================================================================+
-        | y          | :obj:`array`  | 1D-array containing the y-values (intensities) of the spectrum.                                    |
-        +------------+---------------+----------------------------------------------------------------------------------------------------+
-        | k          | :obj:`float`  | Dimensionless Shirley scaling factor; :math:`k=1` matches the left background endpoint to `y[0]`.  |
-        +------------+---------------+----------------------------------------------------------------------------------------------------+
-        | const      | :obj:`float`  | Constant right-hand background level, often set to :math:`I_{\text{right}}`.                       |
-        +------------+---------------+----------------------------------------------------------------------------------------------------+
+        +--------------------+---------------------------+------------------------------------------------------------------------------------------+
+        | Parameters         | Type                      | Description                                                                              |
+        +====================+===========================+==========================================================================================+
+        | y                  | :obj:`array`              | 1D-array of spectrum intensities.                                                        |
+        +--------------------+---------------------------+------------------------------------------------------------------------------------------+
+        | k                  | :obj:`float`              | Nonnegative dimensionless endpoint scaling. k=0 gives a constant background; k=1         |
+        |                    |                           | requests the first data intensity as the first background endpoint.                      |
+        +--------------------+---------------------------+------------------------------------------------------------------------------------------+
+        | const              | :obj:`float`              | Constant background level at the last array point.                                       |
+        +--------------------+---------------------------+------------------------------------------------------------------------------------------+
+        | x                  | :obj:`array`              | Uniformly spaced energies in eV. Required for a numeric alpha_max; optional otherwise.   |
+        +--------------------+---------------------------+------------------------------------------------------------------------------------------+
+        | monotonic          | :obj:`bool`               | Use only positive intensity above the background in the integral. Default False.         |
+        +--------------------+---------------------------+------------------------------------------------------------------------------------------+
+        | alpha_max          | str, float or None        | Coefficient limit: 'auto' (default) uses the 20% slope rule; a positive number sets a    |
+        |                    |                           | limit in inverse eV; None disables it.                                                   |
+        +--------------------+---------------------------+------------------------------------------------------------------------------------------+
 
     Note
     ----
-    This function is used as the model function in the :ref:`ShirleyBG` lmfitxps model.
+    The automatic limit is where endpoint sensitivity ``dk/d ln(alpha)``
+    falls to 20% of its maximum after that maximum. ``q = alpha * abs(dx)``
+    relates the discrete and energy-normalized coefficients.
 
+    The smallest positive root within the limit is selected. If the limit
+    prevents reaching the requested endpoint, the limited background is
+    returned and k can become insensitive. See :func:`shirley_diagnostics`.
+    With no limit, unattainable endpoints raise ValueError.
     """
-    y = np.asarray(y)
-    dtype = np.result_type(y, k, const, float)
-    if not y.size:
-        return np.empty_like(y, dtype=dtype)
-    if y.size == 1 or k == 0:
-        return np.full_like(y, const, dtype=dtype)
-
-    step = k * (y[0] - const)
-
-    # Start from a linear interpolation between the two fixed endpoint
-    # values. The iteration updates only the shape between them.
-    background = np.linspace(const + step, const, y.size, dtype=dtype)
-    for _ in range(100):
-        residual = y - background
-        cumulative = np.concatenate((
-            np.cumsum(residual[:-1][::-1], dtype=dtype)[::-1],
-            np.zeros(1, dtype=dtype),
-        ))
-        total = cumulative[0]
-        if np.isclose(total, 0):
-            return np.full_like(y, const, dtype=dtype)
-
-        new_background = const + step * cumulative / total
-        if np.allclose(new_background, background, rtol=1e-8, atol=1e-10):
-            return new_background
-        background = new_background
-
+    background, diagnostics = _shirley_controlled(y, k, const, x, monotonic, alpha_max)
+    if diagnostics['cap_active']:
+        warnings.warn(
+            "Shirley background reached its coefficient limit; the requested "
+            "endpoint was not reached and the background may be insensitive to k. "
+            "Consider a lower starting k or upper bound; use a smaller alpha_max "
+            "if the background consumes excessive peak signal. Inspect "
+            "shirley_diagnostics for the effective limit and endpoint mismatch.",
+            ShirleyBackgroundWarning, stacklevel=2)
     return background
+
+
+def shirley_diagnostics(y, k, const, *, x=None, monotonic=False, alpha_max="auto"):
+    """Inspect the Shirley coefficient limit and endpoint mismatch.
+
+    Accepts the same arguments as :func:`shirley`. Returns a dictionary:
+
+    .. table:: Diagnostic fields
+        :widths: auto
+        :class: parameter-table
+
+        +--------------------+---------------------------+------------------------------------------------------------------------------------------+
+        | Field              | Type                      | Description                                                                              |
+        +====================+===========================+==========================================================================================+
+        | q                  | :obj:`float`              | Effective discrete integral coefficient.                                                 |
+        +--------------------+---------------------------+------------------------------------------------------------------------------------------+
+        | alpha              | float or None             | Effective coefficient in inverse eV; None without x.                                     |
+        +--------------------+---------------------------+------------------------------------------------------------------------------------------+
+        | cap_active         | :obj:`bool`               | Whether the limit prevented reaching the requested endpoint.                             |
+        +--------------------+---------------------------+------------------------------------------------------------------------------------------+
+        | cap_method         | str or None               | 'slope_20_percent', 'explicit', or None for disabled limits.                             |
+        +--------------------+---------------------------+------------------------------------------------------------------------------------------+
+        | q_limit            | float or None             | Selected discrete limit; None if disabled or no calculation was needed.                  |
+        +--------------------+---------------------------+------------------------------------------------------------------------------------------+
+        | alpha_limit        | float or None             | Selected limit in inverse eV; None without x or a calculated limit.                      |
+        +--------------------+---------------------------+------------------------------------------------------------------------------------------+
+        | requested_endpoint | :obj:`float`              | Requested first background value: const + k*(y[0]-const).                                |
+        +--------------------+---------------------------+------------------------------------------------------------------------------------------+
+        | actual_endpoint    | float or None             | Calculated first background value; None for empty input.                                 |
+        +--------------------+---------------------------+------------------------------------------------------------------------------------------+
+    """
+    return _shirley_controlled(y, k, const, x, monotonic, alpha_max)[1]
+
+
+def _shirley_controlled(y, k, const, x, monotonic, alpha_max):
+    y = np.asarray(y, dtype=float)
+    if y.ndim != 1 or not np.all(np.isfinite(y)):
+        raise ValueError("Shirley intensities must be a finite one-dimensional array")
+    if not np.isfinite(k) or k < 0 or not np.isfinite(const):
+        raise ValueError("Shirley k must be finite and nonnegative; const must be finite")
+    if not isinstance(monotonic, (bool, np.bool_, int, np.integer)) or monotonic not in (0, 1):
+        raise ValueError("monotonic must be a boolean")
+    automatic = isinstance(alpha_max, str) and alpha_max == 'auto'
+    if not automatic and alpha_max is not None:
+        if (not isinstance(alpha_max, (int, float, np.number))
+                or not np.isfinite(alpha_max) or alpha_max <= 0):
+            raise ValueError("alpha_max must be 'auto', positive and finite, or None")
+    dx = None
+    if x is not None:
+        x = np.asarray(x, dtype=float)
+        if x.shape != y.shape or not np.all(np.isfinite(x)):
+            raise ValueError("Shirley energies must be finite and match y")
+        if len(x) > 1:
+            steps = np.diff(x)
+            if not (np.all(steps > 0) or np.all(steps < 0)) or not np.allclose(
+                    steps, np.mean(steps), rtol=5e-3, atol=1e-12):
+                raise ValueError("Shirley energies must be strictly monotonic and uniformly spaced")
+            dx = abs(np.mean(steps))
+    if not automatic and alpha_max is not None and x is None:
+        raise ValueError("x in eV is required for alpha_max; use alpha_max=None to disable the cap")
+    step = k*(y[0]-const) if y.size else 0.
+    if monotonic and step < 0:
+        raise ValueError("monotonic Shirley requires a nonnegative endpoint step")
+    q, capped, qmax = 0., False, None
+    background = np.full_like(y, const)
+    if y.size > 1 and step != 0:
+        scale = max(np.max(np.abs(y[:-1]-const)), abs(step))
+        residual = (y[:-1]-const)/scale
+        target = step/scale
+        if not np.isfinite(scale):
+            raise ValueError("Shirley intensity range is not finite")
+        def evaluate(q):
+            b = np.zeros_like(y)
+            fraction = q/(1+q)
+            for i in range(len(y)-2, -1, -1):
+                excess = residual[i]-b[i+1]
+                b[i] = b[i+1] + fraction*(max(excess, 0.) if monotonic else excess)
+            return b
+        if automatic:
+            # Independent of k: a requested endpoint cannot move its own cap.
+            cap_residual = y[:-1]-const
+            cap_residual = cap_residual/np.max(np.abs(cap_residual))
+            qmax = _shirley_auto_qmax(tuple(cap_residual), bool(monotonic))
+        else:
+            qmax = alpha_max*dx if alpha_max is not None else None
+        if monotonic:
+            upper = qmax if qmax is not None else 1.
+            if qmax is None:
+                if target >= max(0., np.max(residual)):
+                    raise ValueError("Shirley endpoints have no finite positive-q solution")
+                while evaluate(upper)[0] < target:
+                    upper *= 2
+            if evaluate(upper)[0] < target:
+                q, capped = upper, True
+            else:
+                q = brentq(lambda q: evaluate(q)[0]-target, 0., upper,
+                           xtol=5e-324, rtol=4*np.finfo(float).eps)
+            background = const + scale*evaluate(q)
+        elif qmax is None:
+            background = _shirley_uncapped(y, k, const)
+            q = step/np.sum(y[:-1]-background[:-1])
+        else:
+            coefficients = np.trim_zeros(np.r_[residual[0]-target,
+                                               np.diff(residual), -residual[-1]], 'f')
+            tmin = 1/(1+qmax)
+            bracket = _shirley_root_bracket(coefficients, tmin) if coefficients.size else None
+            if bracket is None:
+                q, capped = qmax, True
+            else:
+                lower, upper = bracket
+                t = lower if lower == upper else brentq(
+                    lambda t: np.polynomial.polynomial.polyval(t, coefficients),
+                    lower, upper, xtol=5e-324, rtol=4*np.finfo(float).eps)
+                q = (1-t)/t
+            normalized = evaluate(q)
+            if not capped and not np.isclose(normalized[0], target, rtol=1e-8, atol=1e-10):
+                raise ValueError("Shirley root failed the self-consistency check")
+            background = const + scale*normalized
+    return background, dict(q=float(q), alpha=None if dx is None else float(q/dx),
+                            cap_active=capped, cap_method='slope_20_percent' if automatic else
+                            ('explicit' if alpha_max is not None else None),
+                            q_limit=qmax, alpha_limit=None if dx is None or qmax is None else qmax/dx,
+                            requested_endpoint=float(const+step),
+                            actual_endpoint=float(background[0]) if y.size else None)
+
+
+def _shirley_uncapped(y, k, const):
+    """Solve the original signed equation without a coefficient bound."""
+    y = np.asarray(y, dtype=float)
+    if y.ndim != 1 or not np.all(np.isfinite(y)):
+        raise ValueError("Shirley intensities must be a finite one-dimensional array")
+    if not np.isfinite(k) or k < 0 or not np.isfinite(const):
+        raise ValueError("Shirley k must be finite and nonnegative; const must be finite")
+    step = k * (y[0] - const) if y.size else 0.0
+    if y.size < 2 or step == 0:
+        return np.full_like(y, const)
+
+    # Work relative to the baseline and scale before solving, so tolerance
+    # does not depend on the intensity units or a large constant offset.
+    residual = y[:-1] - const
+    scale = max(np.max(np.abs(residual)), abs(step))
+    residual = residual / scale
+    target = step / scale
+    if not np.isfinite(scale) or not np.all(np.isfinite(residual)):
+        raise ValueError("Shirley intensity range is not finite")
+
+    # With t = 1/(1+q), b_i = (1-t)*residual_i + t*b_(i+1).
+    # The endpoint equation is a polynomial on 0 < t < 1. At k=1,
+    # t=0 is an infinite-q, zero-integral limit, NOT a valid solution.
+    coefficients = np.r_[residual[0] - target,
+                         np.diff(residual), -residual[-1]]
+    coefficients = np.trim_zeros(coefficients, trim='f')
+    if not coefficients.size:
+        raise ValueError("Shirley endpoint equation is degenerate")
+
+    def endpoint(t):
+        return np.polynomial.polynomial.polyval(t, coefficients)
+
+    lower, upper = _shirley_root_bracket(coefficients)
+    t = lower if lower == upper else brentq(
+        endpoint, lower, upper, xtol=5e-324, rtol=4*np.finfo(float).eps)
+    if not 0 < t < 1:
+        raise ValueError("Shirley endpoints have no finite positive-q solution")
+    derivative = np.arange(1, len(coefficients))*coefficients[1:]
+    slope = np.polynomial.polynomial.polyval(t, derivative)
+    slope_scale = np.polynomial.polynomial.polyval(t, np.abs(derivative))
+    if abs(slope) <= 8*np.sqrt(np.finfo(float).eps)*slope_scale:
+        raise ValueError("Shirley root is multiple or too ill-conditioned to resolve")
+    background = np.zeros_like(y)
+    for i in range(y.size - 2, -1, -1):
+        background[i] = (1-t)*residual[i] + t*background[i+1]
+
+    cumulative = np.r_[np.cumsum((residual-background[:-1])[::-1])[::-1], 0.0]
+    total = cumulative[0]
+    if total == 0 or not np.allclose(
+            background, target*cumulative/total, rtol=1e-8, atol=1e-10):
+        raise ValueError("Shirley root failed the self-consistency check")
+    return const + scale*background
+
+
+def _shirley_root_bracket(coefficients, minimum=0.0):
+    """Isolate the largest root in (0, 1), using Bernstein sign bounds.
+
+    Largest t means smallest positive q: the branch reached first from
+    the constant-background limit. Subdivision avoids skipping two roots
+    with equal signs at a coarse bracket's endpoints. Ambiguous/tangent
+    roots raise rather than silently choosing another branch.
+    """
+    degree = len(coefficients) - 1
+    indices = np.arange(degree + 1)
+    weights = np.ones(degree + 1)
+    bernstein = np.full(degree + 1, coefficients[0])
+    for i in range(1, degree + 1):
+        weights[:i] = 0
+        weights[i:] *= (indices[i:] - i + 1) / (degree - i + 1)
+        bernstein += coefficients[i] * weights
+    # Use directly evaluated endpoints to avoid conversion roundoff.
+    bernstein[-1] = np.polynomial.polynomial.polyval(1.0, coefficients)
+    if minimum:
+        work = bernstein.copy()
+        right = np.empty_like(work)
+        right[-1] = work[-1]
+        for i in range(1, len(work)):
+            work = (1-minimum)*work[:-1] + minimum*work[1:]
+            right[-i-1] = work[-1]
+        bernstein = right
+        bernstein[0] = np.polynomial.polynomial.polyval(minimum, coefficients)
+    stack = [(minimum, 1.0, bernstein, 0)]
+    while stack:
+        lower, upper, values, depth = stack.pop()
+        nonzero = values[values != 0]
+        variations = np.count_nonzero(np.signbit(nonzero[1:]) != np.signbit(nonzero[:-1]))
+        if variations == 0:
+            if 0 < upper < 1 and values[-1] == 0:
+                return upper, upper
+            if 0 < lower < 1 and values[0] == 0:
+                return lower, lower
+            continue
+        if (variations == 1 and values[0] != 0 and values[-1] != 0
+                and np.signbit(values[0]) != np.signbit(values[-1])):
+            return lower, upper
+        if depth >= 48:
+            raise ValueError("Shirley root is multiple or cannot be reliably isolated")
+        work = values.copy()
+        left, right = np.empty_like(values), np.empty_like(values)
+        left[0], right[-1] = work[0], work[-1]
+        for i in range(1, len(values)):
+            work = (work[:-1] + work[1:]) / 2
+            left[i], right[-i-1] = work[0], work[-1]
+        middle = (lower + upper) / 2
+        stack.append((lower, middle, left, depth+1))
+        stack.append((middle, upper, right, depth+1))
+    if minimum:
+        return None
+    raise ValueError("Shirley endpoints have no finite positive-q solution")
 
 def slope(y, k):
     """
@@ -257,20 +541,23 @@ def shirley_calculate(x, y, tol=1e-5, maxit=10, bounds=None):
 
     .. table:: Available parameters
         :widths: auto
+        :class: parameter-table
 
-        +-----------+---------------+--------------------------------------------------------------------------------------------------------------------------------+
-        | Parameter |  Type         | Description                                                                                                                    |
-        +===========+===============+================================================================================================================================+
-        | x         | :obj:`array`  | 1D-array containing the x-values (energies) of the spectrum.                                                                   |
-        +-----------+---------------+--------------------------------------------------------------------------------------------------------------------------------+
-        | y         | :obj:`array`  | 1D-array containing the y-values (intensities) of the spectrum.                                                                |
-        +-----------+---------------+--------------------------------------------------------------------------------------------------------------------------------+
-        | tol       | :obj:`float`  | Tolerance used to determine, when the convergence is reached in equation :math:numref:`shirleyconvergence`. Defaults to 1e-5.  |
-        +-----------+---------------+--------------------------------------------------------------------------------------------------------------------------------+
-        | maxit     | :obj:`int`    | Maximum number of iterations before calculation is interrupted. Defaults to 10.                                                |
-        +-----------+---------------+--------------------------------------------------------------------------------------------------------------------------------+
-        | bounds    | :obj:`tuple`  | Either two x values or two (x,y) pairs. Determines the edges of the Shirley background. Background will be constant outside this range. If only x is passed, picks the y of closest data point. If nothing is passed, uses the edges of the data range.    |
-        +-----------+---------------+--------------------------------------------------------------------------------------------------------------------------------+
+        +--------------+------------------+------------------------------------------------------------------------------------------+
+        | Parameter    | Type             | Description                                                                              |
+        +==============+==================+==========================================================================================+
+        | x            | :obj:`array`     | 1D-array containing the x-values (energies) of the spectrum.                             |
+        +--------------+------------------+------------------------------------------------------------------------------------------+
+        | y            | :obj:`array`     | 1D-array containing the y-values (intensities) of the spectrum.                          |
+        +--------------+------------------+------------------------------------------------------------------------------------------+
+        | tol          | :obj:`float`     | Tolerance for the mean squared change between iterations. Defaults to 1e-5.              |
+        +--------------+------------------+------------------------------------------------------------------------------------------+
+        | maxit        | :obj:`int`       | Maximum number of iterations before calculation is interrupted. Defaults to 10.          |
+        +--------------+------------------+------------------------------------------------------------------------------------------+
+        | bounds       | :obj:`tuple`     | Either two x values or two (x,y) pairs. Determines the edges of the Shirley background.  |
+        |              |                  | Background will be constant outside this range. If only x is passed, picks the y of      |
+        |              |                  | closest data point. If nothing is passed, uses the edges of the data range.              |
+        +--------------+------------------+------------------------------------------------------------------------------------------+
 
     Returns:
     --------
@@ -279,7 +566,15 @@ def shirley_calculate(x, y, tol=1e-5, maxit=10, bounds=None):
     Hint
     ----
 
-    This function should be used, if you intend to calculate and remove the background from your data before starting the fitting procedure, if you instead wish to include the background in the fitting model, please use the desired background model, e.g. :ref:`ShirleyBG`.
+    This function retains trapezoidal fixed-point iteration and the optional
+    endpoint bounds. If maxit is reached without convergence, it prints a
+    message and returns the last iterate.
+
+    For a static calculation using the root solver, call :func:`shirley`
+    directly with ``k=1`` and ``const=y[-1]``. That function also supports
+    ``monotonic`` and ``alpha_max``, but uses a different discretization and
+    does not handle bounds. For background parameters that vary during peak
+    fitting, use :ref:`ShirleyBG`.
 
     """
 

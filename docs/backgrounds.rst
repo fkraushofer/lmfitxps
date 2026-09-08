@@ -16,6 +16,34 @@ _____________________
    The class functions are inherited from the lmfit Model class. For details, please refer to their documentation at
    `lmfit Model Class Methods <https://lmfit.github.io/lmfit-py/model.html#model-class-methods>`_.
 
+Shirley options
+---------------
+
+For spectra with very low signal-to-noise, a large requested ``k`` may only
+admit a background that closely follows the data and leaves little peak
+signal. The coefficient limit helps exclude such solutions; the monotonic
+option additionally prevents decreases in the background towards higher
+binding energy.
+
+``ShirleyBG`` provides two fixed options in addition to the fitted ``k`` and
+``const`` parameters:
+
+* ``monotonic=True`` uses only positive intensity above the background in
+  the integral; the default is False.
+* ``alpha_max="auto"`` (default) uses the 20% endpoint-slope rule to limit
+  data-following backgrounds. A positive number instead sets a fixed limit
+  in inverse eV; ``None`` disables the limit.
+
+For example::
+
+    bg_model = ShirleyBG(prefix='bg_', monotonic=True, alpha_max=0.3)
+
+Supply ``x`` in eV for a numeric limit. If a limit prevents reaching the
+requested endpoint, k can become insensitive. Inspect the final result with
+``bg_model.eval_diagnostics(result.params, x=x, y=y)`` and consider a lower
+starting k or upper bound. The limit is a heuristic, not a guarantee that
+Shirley is suitable for the spectrum.
+
 .. _TougaardBG:
 
 :py:class:`TougaardBG`

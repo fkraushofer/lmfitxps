@@ -4,7 +4,7 @@ from .lineshapes import (
     singlett, dublett, dublett_components, _dublett_oversampling,
     fermi_edge, convolve, fft_convolve
 )
-from .backgrounds import tougaard, slope, shirley
+from .backgrounds import tougaard, slope, shirley, shirley_diagnostics
 from lmfit import Model
 import lmfit
 from lmfit.models import guess_from_peak
@@ -560,24 +560,43 @@ class ShirleyBG(lmfit.model.Model):
         {\\int_{E_{\\text{left}}}^{E_{\\text{right}}}
         [I(E') - B_{S,n-1}(E')] \\, dE'}.
 
-    Here, :math:`c` is the right-hand background level and :math:`k` is a dimensionless scaling factor. At :math:`k=0`, the background is constant at :math:`c`; at :math:`k=1`, its left-hand endpoint equals the leftmost data intensity. The normalization prevents the active background from locally following peaks or noise.
+    Here, :math:`c` is the right-hand background level and :math:`k` is a dimensionless scaling factor. At :math:`k=0`, the background is constant at :math:`c`; at :math:`k=1`, its left-hand endpoint equals the leftmost data intensity, provided a finite admissible solution exists. Signed residuals are retained, so the background is not guaranteed to be monotonic.
+
+    ``monotonic`` and ``alpha_max`` are fixed constructor options. A coefficient
+    limit can prevent reaching the requested endpoint and make k insensitive;
+    use ``eval_diagnostics`` to inspect the fitted result.
 
     .. table:: Model-specific available parameters
         :widths: auto
+        :class: parameter-table
 
-        +------------+---------------+----------------------------------------------------------------------------------------------------+
-        | Parameters | Type          | Description                                                                                        |
-        +============+===============+====================================================================================================+
-        | x          | :obj:`array`  | 1D-array containing the x-values (energies) of the spectrum.                                       |
-        +------------+---------------+----------------------------------------------------------------------------------------------------+
-        | y          | :obj:`array`  | 1D-array containing the y-values (intensities) of the spectrum.                                    |
-        +------------+---------------+----------------------------------------------------------------------------------------------------+
-        | k          | :obj:`float`  | Dimensionless Shirley factor; :math:`k=1` matches the left background endpoint to the data.        |
-        +------------+---------------+----------------------------------------------------------------------------------------------------+
-        | const      | :obj:`float`  | Constant right-hand background level, often set to :math:`I_{\\text{right}}`.                      |
-        +------------+---------------+----------------------------------------------------------------------------------------------------+
+        +--------------+------------------+------------------------------------------------------------------------------------------+
+        | Parameters   | Type             | Description                                                                              |
+        +==============+==================+==========================================================================================+
+        | x            | :obj:`array`     | 1D-array containing the x-values (energies) of the spectrum.                             |
+        +--------------+------------------+------------------------------------------------------------------------------------------+
+        | y            | :obj:`array`     | 1D-array containing the y-values (intensities) of the spectrum.                          |
+        +--------------+------------------+------------------------------------------------------------------------------------------+
+        | k            | :obj:`float`     | Dimensionless Shirley factor; :math:`k=1` matches the left background endpoint to the    |
+        |              |                  | data.                                                                                    |
+        +--------------+------------------+------------------------------------------------------------------------------------------+
+        | const        | :obj:`float`     | Constant right-hand background level.                                                    |
+        +--------------+------------------+------------------------------------------------------------------------------------------+
 
         
+    .. table:: Model-specific options
+        :widths: auto
+        :class: parameter-table
+
+        +--------------------+---------------------------+------------------------------------------------------------------------------------------+
+        | Parameters         | Type                      | Description                                                                              |
+        +====================+===========================+==========================================================================================+
+        | monotonic          | :obj:`bool`               | Use only positive intensity above the background in the integral. Default False.         |
+        +--------------------+---------------------------+------------------------------------------------------------------------------------------+
+        | alpha_max          | str, float or None        | Coefficient limit: 'auto' (default) uses the 20% slope rule; a positive number sets a    |
+        |                    |                           | limit in inverse eV; None disables it.                                                   |
+        +--------------------+---------------------------+------------------------------------------------------------------------------------------+
+
     Hint
     ----
     
@@ -589,13 +608,33 @@ class ShirleyBG(lmfit.model.Model):
     
     """ + lmfit.models.COMMON_INIT_DOC)
 
-    def __init__(self, *args, **kwargs):
-        """
-        Initializes the ShirleyBG model instance.
-
-        """
-        super().__init__(shirley, *args, **kwargs)
+    def __init__(self, *args, monotonic=False, alpha_max="auto", **kwargs):
+        """Configure clipping and the inverse-eV cap as fixed model options."""
+        kwargs.setdefault('independent_vars', ['y', 'x'] if alpha_max is not None else ['y'])
+        kwargs.setdefault('param_names', ['k', 'const'])
+        super().__init__(shirley, *args, monotonic=monotonic,
+                         alpha_max=alpha_max, **kwargs)
         self._set_paramhints_prefix()
+
+    def eval_diagnostics(self, params=None, **kwargs):
+        """Inspect the fitted coefficient limit and endpoint mismatch.
+
+        .. table::
+            :widths: auto
+            :class: parameter-table
+
+            +--------------------+---------------------------+------------------------------------------------------------------------------------------+
+            | Parameters         | Type                      | Description                                                                              |
+            +====================+===========================+==========================================================================================+
+            | params             | lmfit.Parameters          | Fitted parameters, including prefixed names and expressions.                             |
+            +--------------------+---------------------------+------------------------------------------------------------------------------------------+
+            | ``**kwargs``       | :obj:`dict`               | The x and y arrays used for model evaluation.                                            |
+            +--------------------+---------------------------+------------------------------------------------------------------------------------------+
+
+        Returns the diagnostic dictionary described in
+        :func:`lmfitxps.backgrounds.shirley_diagnostics`.
+        """
+        return shirley_diagnostics(**self.make_funcargs(params, kwargs))
 
     def _set_paramhints_prefix(self):
         """
