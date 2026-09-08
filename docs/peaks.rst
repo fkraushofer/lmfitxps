@@ -7,6 +7,30 @@ Peak-like/Step-like models
 The following sections documents the peak-like/step-like models implemented as an extension to the `lmfit build-in models <https://lmfit.github.io/lmfit-py/builtin_models.html>`_ .
 The models are thereby mostly based on the `lmfit lineshapes module <https://github.com/lmfit/lmfit-py/blob/master/lmfit/lineshapes.py>`_.
 
+Energy convention
+-----------------
+
+Supply binding energies in descending order or kinetic energies in ascending
+order. The models infer the energy scale from this ordering; inverting a plot
+axis does not change the model convention. For the same spectrum, converting
+with ``binding_energy = energy_offset - kinetic_energy`` leaves the intensity
+array unchanged and transforms each peak center by the same relation.
+
+For the Doniach-Sunjic singlet and doublet, ``gamma`` is the asymmetry
+parameter. Positive values produce a tail toward higher binding energy,
+equivalently lower kinetic energy. The doublet's positive ``soc`` places the
+secondary peak at higher binding energy or lower kinetic energy than the
+primary peak. Widths, asymmetry, amplitudes, and splitting retain their values
+when converting between the two energy scales.
+
+.. note::
+
+   Binding-energy Doniach profiles are reflected about each component's center.
+   Versions up to and including 4.2.0 incorrectly placed their tails toward
+   lower binding energy. Binding-energy fits made with these versions should
+   be refitted; negating ``gamma``
+   does not mirror a Doniach profile and can produce negative intensities.
+
 
 .. _FermiEdgeModel:
 

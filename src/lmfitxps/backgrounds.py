@@ -8,7 +8,7 @@ __author__ = "Julian Andreas Hochhaus, Florian Kraushofer"
 __copyright__ = "Copyright 2025"
 __credits__ = ["Julian Andreas Hochhaus", "Florian Kraushofer"]
 __license__ = "MIT"
-__version__ = "4.2.0"
+__version__ = "4.3.0"
 __maintainer__ = "Julian Andreas Hochhaus"
 __email__ = "julian.hochhaus@tu-dortmund.de"
 
@@ -77,19 +77,24 @@ def tougaard_closure():
      ----
      This function is used as the model function in the :ref:`TougaardBG` lmfitxps model.
      """
-    bgrnd = [None, None, None] # This will act as the closure to store the precalculated data
+    bgrnd = None
 
     def tougaard_helper(x, y, B, C, C_d, D, extend=0):
         nonlocal bgrnd
+        x = np.asarray(x, dtype=float)
+        y = np.asarray(y, dtype=float)
         extend = int(extend)
-        if bgrnd[0] is not None and np.array_equal(bgrnd[0], y) and int(bgrnd[2]) == extend:
-            return B * np.array(bgrnd[1])
-        bgrnd[0] = np.copy(y)
-        bgrnd[2] = extend
+        shape = (C, C_d, D, extend)
+        if (bgrnd is not None and bgrnd[2] == shape
+                and np.array_equal(bgrnd[0], x)
+                and np.array_equal(bgrnd[1], y)):
+            return B * bgrnd[3]
 
         delta_x = abs((x[-1] - x[0])) / len(x)
         len_padded = abs(int(extend / delta_x))
-        padded_x = np.concatenate([x, np.linspace(x[-1] + delta_x, x[-1] + delta_x * len_padded, len_padded)])
+        # Continue toward lower BE / higher KE, following the input order.
+        signed_step = np.sign(x[-1] - x[0]) * delta_x
+        padded_x = np.concatenate([x, x[-1] + signed_step * np.arange(1, len_padded + 1)])
         padded_y = np.concatenate([y, np.full(len_padded, np.mean(y[-10:]))])
 
         bg = np.zeros_like(x)
@@ -97,7 +102,9 @@ def tougaard_closure():
             dx = padded_x[k:] - x_k
             denominator = (C + C_d * dx ** 2) ** 2 + D * dx ** 2
             bg[k] = np.sum(np.abs(dx) / denominator * padded_y[k:] * delta_x)
-        bgrnd[1] = bg
+        # B is only a scale factor; every other integral input belongs in
+        # the cache key. Copies also detect in-place edits by callers.
+        bgrnd = (x.copy(), y.copy(), shape, bg)
         return B * bg
 
     return tougaard_helper
