@@ -2,9 +2,9 @@
 
 Peak-like/Step-like models
 ==========================
-.. index:: Peak-Models, Fermi edge, Singlett, Dublett
+.. index:: Peak-Models, Fermi edge, Singlet, Doublet
 
-The following sections documents the peak-like/step-like models implemented as an extension to the `lmfit build-in models <https://lmfit.github.io/lmfit-py/builtin_models.html>`_ .
+The following sections document the peak-like/step-like models implemented as an extension to the `lmfit built-in models <https://lmfit.github.io/lmfit-py/builtin_models.html>`_.
 The models are thereby mostly based on the `lmfit lineshapes module <https://github.com/lmfit/lmfit-py/blob/master/lmfit/lineshapes.py>`_.
 
 Energy convention
@@ -46,11 +46,12 @@ __________________________
    `lmfit Model Class Methods <https://lmfit.github.io/lmfit-py/model.html#model-class-methods>`_.
 
 .. _ConvGaussianDoniachSinglett:
+.. _ConvGaussianDoniachSinglet:
 
-:py:class:`ConvGaussianDoniachSinglett`
+:py:class:`ConvGaussianDoniachSinglet`
 _______________________________________
 
-.. autoclass:: lmfitxps.models.ConvGaussianDoniachSinglett
+.. autoclass:: lmfitxps.models.ConvGaussianDoniachSinglet
     :exclude-members: guess, __init__, _set_paramhints_prefix
     :noindex:
 .. note::
@@ -58,17 +59,28 @@ _______________________________________
    `lmfit Model Class Methods <https://lmfit.github.io/lmfit-py/model.html#model-class-methods>`_.
 
 .. _ConvGaussianDoniachDublett:
+.. _ConvGaussianDoniachDoublet:
 
-:py:class:`ConvGaussianDoniachDublett`
+:py:class:`ConvGaussianDoniachDoublet`
 ______________________________________
 
-.. autoclass:: lmfitxps.models.ConvGaussianDoniachDublett
+.. autoclass:: lmfitxps.models.ConvGaussianDoniachDoublet
     :exclude-members: guess, __init__, _set_paramhints_prefix
     :noindex:
 
 .. note::
    The class functions are inherited from the lmfit Model class. For details, please refer to their documentation at
    `lmfit Model Class Methods <https://lmfit.github.io/lmfit-py/model.html#model-class-methods>`_.
+
+Compatibility aliases
+---------------------
+
+The historical names ``ConvGaussianDoniachSinglett`` and
+``ConvGaussianDoniachDublett`` remain exact aliases for backwards
+compatibility. The corresponding ``eval_dublett_components`` method and
+``dublett_ratio_diagnostics`` and ``dublett_ratio_report`` helpers are also
+retained. New code should use the correctly spelled names.
+
 .. _fwhm_doniach:
 
 Approximation to the FWHM of Doniach-Sunjic Line Shape

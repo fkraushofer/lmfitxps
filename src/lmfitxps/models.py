@@ -1,7 +1,7 @@
 import numpy as np
 from lmfit.lineshapes import doniach, gaussian, thermal_distribution
 from .lineshapes import (
-    singlett, dublett, dublett_components, _dublett_oversampling,
+    singlet, doublet, doublet_components, _doublet_oversampling,
     fermi_edge, convolve, fft_convolve
 )
 from .backgrounds import tougaard, slope, shirley, shirley_diagnostics
@@ -21,7 +21,7 @@ __maintainer__ = "Julian Andreas Hochhaus"
 __email__ = "julian.hochhaus@tu-dortmund.de"
 
 
-class ConvGaussianDoniachSinglett(lmfit.model.Model):
+class ConvGaussianDoniachSinglet(lmfit.model.Model):
     __doc__ = ("""
     A model based on a convolution of a Gaussian and a Doniach-Sunjic profile. The model is designed for fitting XPS signals with asymmetry. 
     The Gaussian thereby represents the gaussian-like influences of the experimental setup and the Doniach-Sunjic represents the sample's physics.
@@ -71,7 +71,7 @@ class ConvGaussianDoniachSinglett(lmfit.model.Model):
     Hint
     ----
 
-    The `ConvGaussianDoniachSinglett` class inherits from `lmfit.model.Model` and only extends it. Therefore, the `lmfit.model.Model` class parameters are inherited as well.
+    The `ConvGaussianDoniachSinglet` class inherits from `lmfit.model.Model` and only extends it. Therefore, the `lmfit.model.Model` class parameters are inherited as well.
 
 
     **LMFIT: Common models documentation**
@@ -80,7 +80,7 @@ class ConvGaussianDoniachSinglett(lmfit.model.Model):
     """ + lmfit.models.COMMON_INIT_DOC)
 
     def __init__(self, *args, **kwargs):
-        super().__init__(singlett, *args, **kwargs)
+        super().__init__(singlet, *args, **kwargs)
         self._set_paramhints_prefix()
 
     def _set_paramhints_prefix(self):
@@ -127,12 +127,12 @@ class ConvGaussianDoniachSinglett(lmfit.model.Model):
         return lmfit.models.update_param_vals(params, self.prefix, **kwargs)
 
 
-class ConvGaussianDoniachDublett(lmfit.model.Model):
+class ConvGaussianDoniachDoublet(lmfit.model.Model):
     __doc__ = ("""
-    This model represents a dublett peak profile as observed in XPS spectra.
-    The model is basically the sum of two singlett peak profiles separated by the energy distance of the two orbitals with different spin-orbit state.
-    The implementation is therefore similar to the one of :ref:`ConvGaussianDoniachSinglett`.
-    It based on a convolution of a Gaussian and the sum of two Doniach-Sunjic profiles.
+    This model represents a doublet peak profile as observed in XPS spectra.
+    The model is the sum of two singlet peak profiles separated by the energy distance of the two orbitals with different spin-orbit states.
+    The implementation is therefore similar to :ref:`ConvGaussianDoniachSinglet`.
+    It is based on a convolution of a Gaussian and the sum of two Doniach-Sunjic profiles.
 
     The implementation is based on the `Gaussian <https://github.com/lmfit/lmfit-py/blob/7710da6d7e878ffee0dc90a85286f1ec619fc20f/lmfit/lineshapes.py#L46>`_ 
     and `Doniach <https://github.com/lmfit/lmfit-py/blob/7710da6d7e878ffee0dc90a85286f1ec619fc20f/lmfit/lineshapes.py#L296>`_ 
@@ -145,8 +145,8 @@ class ConvGaussianDoniachDublett(lmfit.model.Model):
          &= A \\cdot \\int_{-\\infty}^{\\infty} (DS_1(E', \\mu,\\gamma,\\alpha)+DS_2(E', \\mu,\\gamma,\\alpha, d,r,ckf)) G(E - E', \\sigma)\\, dE'
 
     Thereby:
-        - :math:`A` is the amplitude of the larger peak of the dublett (P1),
-        - :math:`r` defines the ratio of the height of the smaller dublett-peak (P2) with respect to the larger one,
+        - :math:`A` is the amplitude of the larger peak of the doublet (P1),
+        - :math:`r` defines the ratio of the height of the smaller doublet peak (P2) with respect to the larger one,
         - :math:`\\mu` is the center of the larger peak (P1),
         - :math:`d` is the energy distance between the two peaks as an absolute value
         - :math:`\\gamma` represents the broadening of P1,
@@ -165,11 +165,11 @@ class ConvGaussianDoniachDublett(lmfit.model.Model):
         +------------------+---------------+----------------------------------------------------------------------------------------+
         | y                | :obj:`array`  | 1D-array containing the y-values (intensities) of the spectrum.                        |
         +------------------+---------------+----------------------------------------------------------------------------------------+
-        | amplitude        | :obj:`float`  | amplitude :math:`A` of the larger peak (P1) of the dublett.                            |
+        | amplitude        | :obj:`float`  | amplitude :math:`A` of the larger peak (P1) of the doublet.                            |
         +------------------+---------------+----------------------------------------------------------------------------------------+
-        | sigma            | :obj:`float`  | Doniach-broadening of the larger peak (P1) of the dublett.                             |
+        | sigma            | :obj:`float`  | Doniach broadening of the larger peak (P1) of the doublet.                             |
         +------------------+---------------+----------------------------------------------------------------------------------------+
-        | gamma            | :obj:`float`  | Asymmetry of the larger peak (P1) of the dublett.                                      |
+        | gamma            | :obj:`float`  | Asymmetry of the larger peak (P1) of the doublet.                                      |
         +------------------+---------------+----------------------------------------------------------------------------------------+
         | center           | :obj:`float`  | Center of peak P1.                                                                     |
         +------------------+---------------+----------------------------------------------------------------------------------------+
@@ -185,7 +185,7 @@ class ConvGaussianDoniachDublett(lmfit.model.Model):
     Hint
     ----
 
-    The `ConvGaussianDoniachDublett` class inherits from `lmfit.model.Model` and only extends it. Therefore, the `lmfit.model.Model` class parameters are inherited as well.
+    The `ConvGaussianDoniachDoublet` class inherits from `lmfit.model.Model` and only extends it. Therefore, the `lmfit.model.Model` class parameters are inherited as well.
 
 
     **LMFIT: Common models documentation**
@@ -198,19 +198,19 @@ class ConvGaussianDoniachDublett(lmfit.model.Model):
             raise ValueError("max_oversampling must be a positive integer")
         self.max_oversampling = int(max_oversampling)
 
-        def oversampled_dublett(
+        def oversampled_doublet(
                 x, amplitude, sigma, gamma, gaussian_sigma, center, soc,
                 height_ratio, fct_coster_kronig):
-            return dublett(
+            return doublet(
                 x, amplitude, sigma, gamma, gaussian_sigma, center, soc,
                 height_ratio, fct_coster_kronig,
                 max_oversampling=self.max_oversampling,
             )
 
-        super().__init__(oversampled_dublett, *args, **kwargs)
+        super().__init__(oversampled_doublet, *args, **kwargs)
         self._set_paramhints_prefix()
 
-    def eval_dublett_components(self, params, x):
+    def eval_doublet_components(self, params, x):
         """Evaluate the final sampled primary and secondary peak profiles."""
         values = params.valuesdict()
         names = (
@@ -218,17 +218,20 @@ class ConvGaussianDoniachDublett(lmfit.model.Model):
             'soc', 'height_ratio', 'fct_coster_kronig'
         )
         arguments = [values[self.prefix + name] for name in names]
-        return dublett_components(
+        return doublet_components(
             x, *arguments, max_oversampling=self.max_oversampling
         )
 
+    # Historical public spelling retained as an exact method alias.
+    eval_dublett_components = eval_doublet_components
+
     def ratio_diagnostics(self, params, x):
         """Return requested and sampled ratios for the supplied fit range."""
-        primary, secondary = self.eval_dublett_components(params, x)
+        primary, secondary = self.eval_doublet_components(params, x)
         primary_area = abs(trapezoid(primary, x))
         secondary_area = abs(trapezoid(secondary, x))
         values = params.valuesdict()
-        required, used = _dublett_oversampling(
+        required, used = _doublet_oversampling(
             x,
             values[self.prefix + 'sigma'],
             values[self.prefix + 'fct_coster_kronig'],
@@ -310,8 +313,8 @@ class ConvGaussianDoniachDublett(lmfit.model.Model):
         return lmfit.models.update_param_vals(params, self.prefix, **kwargs)
 
 
-def dublett_ratio_diagnostics(result, x=None):
-    """Return sampled-ratio diagnostics for every dublett in a fit result."""
+def doublet_ratio_diagnostics(result, x=None):
+    """Return sampled-ratio diagnostics for every doublet in a fit result."""
     if x is None:
         x = result.userkws.get('x')
     if x is None:
@@ -319,21 +322,23 @@ def dublett_ratio_diagnostics(result, x=None):
 
     diagnostics = {}
     for component in result.model.components:
-        if isinstance(component, ConvGaussianDoniachDublett):
+        if isinstance(component, ConvGaussianDoniachDoublet):
+            # Preserve the historical no-prefix key for callers that consume
+            # this dictionary. User-provided prefixes are unchanged.
             label = component.prefix.rstrip('_') or 'dublett'
             diagnostics[label] = component.ratio_diagnostics(result.params, x)
     return diagnostics
 
 
-def dublett_ratio_report(result, x=None):
-    """Format actual sampled ratios for every dublett in a fit result."""
+def doublet_ratio_report(result, x=None):
+    """Format actual sampled ratios for every doublet in a fit result."""
     reports = []
     report_x = result.userkws.get('x') if x is None else x
-    diagnostics = dublett_ratio_diagnostics(result, x=report_x)
+    diagnostics = doublet_ratio_diagnostics(result, x=report_x)
     components = {
         (component.prefix.rstrip('_') or 'dublett'): component
         for component in result.model.components
-        if isinstance(component, ConvGaussianDoniachDublett)
+        if isinstance(component, ConvGaussianDoniachDoublet)
     }
     for label in diagnostics:
         component = components[label]
@@ -342,10 +347,23 @@ def dublett_ratio_report(result, x=None):
         )
     return "\n\n".join(reports)
 
+
+# Compatibility aliases for German spellings used through lmfitxps 4.x.
+ConvGaussianDoniachSinglett = ConvGaussianDoniachSinglet
+ConvGaussianDoniachDublett = ConvGaussianDoniachDoublet
+doublet_ratio_diagnostics.__doc__ += (
+    "\n\nThe legacy name ``dublett_ratio_diagnostics`` remains available."
+)
+doublet_ratio_report.__doc__ += (
+    "\n\nThe legacy name ``dublett_ratio_report`` remains available."
+)
+dublett_ratio_diagnostics = doublet_ratio_diagnostics
+dublett_ratio_report = doublet_ratio_report
+
 class FermiEdgeModel(lmfit.model.Model):
     __doc__ = ("""
         This Model function is intended to fit the Fermi edge in XPS spectra.
-        To do so, a Fermi-Dirac Distribution is convoluted with a Gaussian.
+        To do so, a Fermi-Dirac distribution is convolved with a Gaussian.
 
         The implementation is based on the `Gaussian <https://github.com/lmfit/lmfit-py/blob/7710da6d7e878ffee0dc90a85286f1ec619fc20f/lmfit/lineshapes.py#L46>`_ 
         and `thermal_distribution (form='fermi') <https://github.com/lmfit/lmfit-py/blob/7710da6d7e878ffee0dc90a85286f1ec619fc20f/lmfit/lineshapes.py#L371>`_ 

@@ -19,7 +19,7 @@ ____________________________
 .. autofunction:: lmfitxps.backgrounds.shirley_calculate
 
 Using the root solver without fitting
-------------------------------------
+-------------------------------------
 
 ``shirley_calculate`` retains its explicit iterative algorithm, including
 ``tol``, ``maxit`` and the optional endpoint ``bounds``. To use the root solver

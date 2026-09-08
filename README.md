@@ -17,7 +17,7 @@
 ## Introduction
 Welcome to lmfitxps, a small Python package designed as an extension for the popular lmfit package, specifically tailored for X-ray Photoelectron Spectroscopy (XPS) data analysis.
 
-While lmfit provides simple tools to build complex fitting models for non-linear least-squares problems and applies these models to real data, as well as introduces several built-in models, `lmfitxps` acts as an extension to lmfit designed for XPS data analysis. `lmfitxps` provides a comprehensive set of functions and models that facilitate the fitting of XPS spectra. In particular, lmfitxps provides several models that use the convolution of a Gaussian with model functions of the limit-package.
+While lmfit provides simple tools to build complex fitting models for non-linear least-squares problems and applies these models to real data, as well as introducing several built-in models, `lmfitxps` acts as an extension to lmfit designed for XPS data analysis. `lmfitxps` provides a comprehensive set of functions and models that facilitate the fitting of XPS spectra. In particular, lmfitxps provides several models that convolve a Gaussian with model functions from the lmfit package.
 
 In addition to models for fitting signals in XPS data, lmfitxps introduces several background models that can be included in the fit model for fitting the data rather than subtracting a precalculated background. This is the so-called active approach, as suggested by A. Herrera-Gomez, and generally leads to better fit results.
 

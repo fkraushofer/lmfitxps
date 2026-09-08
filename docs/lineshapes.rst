@@ -6,8 +6,13 @@ In the following subsections, all used model functions which are used for the lm
 Lineshapes
 ~~~~~~~~~~
 
-.. autofunction:: lmfitxps.lineshapes.singlett
-.. autofunction:: lmfitxps.lineshapes.dublett
+.. autofunction:: lmfitxps.lineshapes.singlet
+.. autofunction:: lmfitxps.lineshapes.doublet
+.. autofunction:: lmfitxps.lineshapes.doublet_components
+
+The former German spellings ``singlett``, ``dublett``, and
+``dublett_components`` remain available as compatibility aliases. New code
+should use ``singlet``, ``doublet``, and ``doublet_components``.
 .. autofunction:: lmfitxps.lineshapes.fermi_edge
 
 Background model functions
@@ -23,7 +28,7 @@ Convolution Functions
 .. autofunction:: lmfitxps.lineshapes.convolve
 
 .. note::
-   The `fft_convolve` function is significantly faster—by more than an order of magnitude—because it utilizes the properties of convolution in the Fourier transform. As a result, it is employed for all convoluted models within the package.
+   The `fft_convolve` function is significantly faster—by more than an order of magnitude—because it utilizes the properties of convolution in the Fourier transform. As a result, it is employed for all convolved models within the package.
 
 References
 ~~~~~~~~~~

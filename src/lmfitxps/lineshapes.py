@@ -11,7 +11,7 @@ __version__ = "4.3.0"
 __maintainer__ = "Julian Andreas Hochhaus"
 __email__ = "julian.hochhaus@tu-dortmund.de"
 
-def _dublett_oversampling(x, sigma, fct_coster_kronig, max_oversampling):
+def _doublet_oversampling(x, sigma, fct_coster_kronig, max_oversampling):
     """Return the required and capped internal-grid oversampling factors."""
     x = np.asarray(x, dtype=float)
     if x.ndim != 1 or x.size < 2:
@@ -34,20 +34,20 @@ def _dublett_oversampling(x, sigma, fct_coster_kronig, max_oversampling):
     return required, min(required, max_oversampling)
 
 
-def dublett_components(
+def doublet_components(
         x, amplitude, sigma, gamma, gaussian_sigma, center, soc,
         height_ratio, fct_coster_kronig, max_oversampling=10):
-    """Evaluate the two convolved dublett components separately."""
+    """Evaluate the two convolved doublet components separately."""
     x = np.asarray(x, dtype=float)
     if not isinstance(max_oversampling, (int, np.integer)) or max_oversampling < 1:
         raise ValueError("max_oversampling must be a positive integer")
 
-    required, oversampling = _dublett_oversampling(
+    required, oversampling = _doublet_oversampling(
         x, sigma, fct_coster_kronig, max_oversampling
     )
     if required > max_oversampling:
         warnings.warn(
-            "The intrinsic dublett width requires a finer internal grid than "
+            "The intrinsic doublet width requires a finer internal grid than "
             "the configured max_oversampling permits. The convolved profile "
             "may depend on grid alignment; increase max_oversampling "
             "deliberately if needed.",
@@ -103,11 +103,11 @@ def dublett_components(
     return primary * scale, secondary * scale
 
 
-def dublett(
+def doublet(
         x, amplitude, sigma, gamma, gaussian_sigma, center, soc,
         height_ratio, fct_coster_kronig, max_oversampling=10):
     """
-    Calculates the convolution of a Doniach-Sunjic Dublett with a Gaussian.
+    Calculate the convolution of a Doniach-Sunjic doublet with a Gaussian.
 
     The intrinsic profiles and convolution are evaluated on an adaptively
     oversampled grid before interpolation onto the input grid. The public
@@ -141,16 +141,16 @@ def dublett(
     Returns
     -------
     array-like
-        Convolution of the Doniach dublett and Gaussian profile.
+        Convolution of the Doniach doublet and Gaussian profile.
     """
-    primary, secondary = dublett_components(
+    primary, secondary = doublet_components(
         x, amplitude, sigma, gamma, gaussian_sigma, center, soc,
         height_ratio, fct_coster_kronig, max_oversampling=max_oversampling
     )
     return primary + secondary
 
 
-def singlett(x, amplitude, sigma, gamma, gaussian_sigma, center):
+def singlet(x, amplitude, sigma, gamma, gaussian_sigma, center):
     """
     Calculates the convolution of a Doniach-Sunjic with a Gaussian.
     Thereby, the Gaussian acts as the convolution kernel.
@@ -186,6 +186,15 @@ def singlett(x, amplitude, sigma, gamma, gaussian_sigma, center):
                                  1 / (np.sqrt(2 * np.pi) * gaussian_sigma) * gaussian(x, amplitude=1, center=np.mean(x),
                                                                                       sigma=gaussian_sigma), is_binding_energy=is_binding_energy)
     return amplitude * conv_temp / max(conv_temp)
+
+
+# Compatibility aliases for the German spellings used through lmfitxps 4.x.
+# Keep these as direct aliases so imports, identity checks, and lmfit funcdefs
+# that use the historical keys continue to work.
+_dublett_oversampling = _doublet_oversampling
+dublett_components = doublet_components
+dublett = doublet
+singlett = singlet
 
 
 kb = 8.6173e-5  # Boltzmann k in eV/K , replace by scipy const value

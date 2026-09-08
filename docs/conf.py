@@ -51,7 +51,8 @@ html_theme_options = {
 }
 html_short_title = project  # Use project variable for consistency
 html_favicon = "src/logos/icon.ico"
-html_static_path = []
+html_static_path = ['_static']
+html_css_files = ['custom.css']
 
 # Enable search functionality (this should be enabled by default)
 html_search_language='en'  # Specify language if needed

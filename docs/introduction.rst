@@ -27,11 +27,11 @@ For further details, please refer to, for example, the `Practical guide for curv
    | Model                                     | Description                                                |
    +===========================================+============================================================+
    |                                           | Convolution of a Gaussian with a Doniach lineshape used to |
-   | ``ConvGaussianDoniachSinglett``           | fit singlet XPS peaks such as *s-orbitals*.                |
+   | ``ConvGaussianDoniachSinglet``            | fit singlet XPS peaks such as *s-orbitals*.                |
    |                                           |                                                            |
    +-------------------------------------------+------------------------------------------------------------+
    |                                           | Convolution of a Gaussian with a pair of Doniach lineshapes|
-   | ``ConvGaussianDoniachDublett``            | used to fit doublet XPS peaks such as *p-, d-, f-orbitals*.|
+   | ``ConvGaussianDoniachDoublet``            | used to fit doublet XPS peaks such as *p-, d-, f-orbitals*.|
    |                                           |                                                            |
    +-------------------------------------------+------------------------------------------------------------+
    |                                           | Convolution of a Gaussian with a Fermi Dirac Step function |
@@ -54,7 +54,7 @@ The available background models are:
    |                                           | function (4-PIESCS) as suggested by                        |
    |                                           | `R.Hesse <https://doi.org/10.1002/sia.3746>`_.             |
    +-------------------------------------------+------------------------------------------------------------+
-   |    ``SlopeBG``                           | Calculates a sloping background                             |
+   |    ``SlopeBG``                            | Calculates a sloping background                            |
    +-------------------------------------------+------------------------------------------------------------+
 
 .. _R.Hesse: https://doi.org/10.1002/sia.3746
@@ -103,14 +103,14 @@ Using one of the predefined models in `lmfitxps` typically follows this schemati
 .. code-block:: python
 
     import numpy as np
-    from lmfitxps.models import ChoosenModel
+    from lmfitxps.models import ChosenModel
 
     # Import your data, ensuring that energy (x) and intensity (y) values are stored in arrays
     x = np.array([...])  # Replace with your energy data
     y = np.array([...])  # Replace with your intensity data
 
     # Initialize the model
-    model = ChoosenModel(prefix='choosen_model_')  # Model parameters will have the specified prefix
+    model = ChosenModel(prefix='chosen_model_')  # Model parameters will have the specified prefix
 
     # Define initial parameters for the model
     params = model.make_params(param1=10, param2=40)
@@ -155,7 +155,7 @@ FermiModel
 
     .. literalinclude:: ../examples/Example_FermiEdgeModel.py
 
-ConvGaussianDoniachSinglett with ShirleyBG Model
+ConvGaussianDoniachSinglet with ShirleyBG Model
 ------------------------------------------------
 
 .. |singlettbin| image:: ../examples/plots/plot_singlett_bin.png
@@ -175,7 +175,7 @@ ConvGaussianDoniachSinglett with ShirleyBG Model
     .. literalinclude:: ../examples/Example_ConvGaussianDoniachSinglett.py
 
 
-ConvGaussianDoniachDublett with TougaardBG Model
+ConvGaussianDoniachDoublet with TougaardBG Model
 ------------------------------------------------
 
 

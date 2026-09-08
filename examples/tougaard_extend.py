@@ -27,8 +27,8 @@ def guess_extend(x,y, B, C, C_d, D):
 
 exec_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 tougaard_model = models.TougaardBG(prefix='tougaard_', independent_vars=['y', 'x'])
-d1 = models.ConvGaussianDoniachDublett(prefix='d1_')
-d2 = models.ConvGaussianDoniachDublett(prefix='d2_')
+d1 = models.ConvGaussianDoniachDoublet(prefix='d1_')
+d2 = models.ConvGaussianDoniachDoublet(prefix='d2_')
 const = lmfit.models.ConstantModel(prefix='const_')
 
 data = np.genfromtxt(exec_dir + '/examples/clean_Au_4f.csv', delimiter=',', skip_header=1)

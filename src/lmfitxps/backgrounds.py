@@ -28,7 +28,7 @@ def tougaard_closure():
 
          tougaard = tougaard_closure()
 
-     The Tougaard backlground is based on the four-parameter loss function (4-PIESCS) as suggested by R.Hesse [1]_.
+     The Tougaard background is based on the four-parameter loss function (4-PIESCS) as suggested by R. Hesse [1]_.
 
      | In addition to R.Hesse's approach, this model introduces the `extend` parameter, for details, please refer to :ref:`extend_parameter`.
 
@@ -532,7 +532,7 @@ def shirley_calculate(x, y, tol=1e-5, maxit=10, bounds=None):
 
     The iterative process continues until the difference :math:`B_{S, n}(E) - B_{S, n-1}(E)` is suitable small or the number of maximum iterations :math:`maxit` is exceeded.
 
-    Initially, :math:`B_{S, 0}(E)=0` is choosen and :math:`k_n` is found from the requirement, that :math:`\\left(I_{\\text{left}}-B_{S, n}(E_{\\text{left}})\\right)=0`.
+    Initially, :math:`B_{S, 0}(E)=0` is chosen and :math:`k_n` is found from the requirement that :math:`\\left(I_{\\text{left}}-B_{S, n}(E_{\\text{left}})\\right)=0`.
     For further details, please refer to e.g. S. Tougaard [6]_ .
 
     Typically, convergence is reached after :math:`\\approx 5` iterations. The convergence criterion is:
@@ -689,7 +689,7 @@ def tougaard_calculate(x, y, tb=2866, tc=1643, tcd=1, td=1, maxit=100):
         - :math:`B_T(E)` represents the Tougaard background at energy :math:`E`,
         - :math:`y(E')` is the measured intensity at :math:`E'`,
         - :math:`T` is the energy difference :math:`E' - E`.
-        - :math:`B` parameter of the 4-PIESCS loss function as introduced by R.Hesse [1]_. Acts as the scaling factor for the Tougaard background model. This parameter is the only one optimized/variated during the calculation.
+        - :math:`B` parameter of the 4-PIESCS loss function as introduced by R. Hesse [1]_. Acts as the scaling factor for the Tougaard background model. This parameter is the only one varied during the calculation.
         - :math:`C` , :math:`C_d` and :math:`D` are parameter of the 4-PIESCS loss function as introduced by R.Hesse [1]_. These parameters are kept fixed during the calculation.
 
     To generate the 2-PIESCS loss function, set :math:`C_d` to 1 and :math:`D` to 0.

@@ -80,7 +80,7 @@ Due to the nature of the Tougaard background, one encounters the integral:
     B_T(E) = \int_{E}^{\infty} \frac{B \cdot T}{{(C + C_d \cdot T^2)^2} + D \cdot T^2} \cdot y(E') \, dE'
 
 | It's worth noting that the upper bound of the integral is set to :math:`\infty`. However, experimental data collection usually occurs within a finite energy range. Consequently, the need for suitable approximations to this integral arises.
-| A common approach is to limit the integral to the measured energy range. By doing so, the Tougaard integral approaches :math:`0` for the rightmost energy values (depending on the choosen constant!), leading to an inaccurate approximation of the measured data. To address this issue, the background is modified using the following equation:
+| A common approach is to limit the integral to the measured energy range. By doing so, the Tougaard integral approaches :math:`0` for the rightmost energy values (depending on the chosen constant), leading to an inaccurate approximation of the measured data. To address this issue, the background is modified using the following equation:
 
 .. math::
 
@@ -104,7 +104,7 @@ To generate such a background, the :ref:`TougaardBG` -model could be used with `
 
     # Set all other parameters
 
-| Using this background model, an *Au4f* spectrum was fitted. To model the dublett structure, a convolution of a gaussian with doniach profiles was used as implemented in :py:class:`ConvGaussianDoniachDublett`.
+| Using this background model, an *Au4f* spectrum was fitted. To model the doublet structure, a convolution of a Gaussian with Doniach profiles was used as implemented in :py:class:`lmfitxps.models.ConvGaussianDoniachDoublet`.
 | All peaks parameters were fixed and not varied in the fit to make it possible to compare the effect of different values for the ``extend`` parameter.
 
 As shown in the figure below, the combination of :ref:`TougaardBG` and :mod:`ConstantModel` already leads to a good agreement between fit and experimental data.
@@ -153,7 +153,7 @@ Nevertheless, when compared to an average background value of approximately :mat
 
 .. figure:: src/plots/combined2_plot.png
    :width: 75%
-   :alt: Comparison of backgrounds away from the dublett structure.
+   :alt: Comparison of backgrounds away from the doublet structure.
 
 .. collapse:: To see the source code for generating the extend-parameter plots, please expand:
 
